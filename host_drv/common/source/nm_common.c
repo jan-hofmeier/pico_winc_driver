@@ -33,7 +33,21 @@
  */
 #include "common/include/nm_common.h"
 
-void m2m_memcpy(uint8 *pDst, uint8 *pSrc, uint32 sz)
+void (*at_sb_printf)(const char *_format, ...) = NULL;
+
+/*
+*  @fn     m2m_memcpy
+*  @brief  Copy specified number of bytes from source buffer to destination buffer
+*  @param [out]    pDst
+*                  Pointer to destination buffer
+*  @param [in] pSrc
+*                  Pointer to source buffer
+*  @param [in] sz
+*                  Number of bytes to copy
+*  @return 0 for success, -1 otherwise
+*/
+
+void m2m_memcpy(uint8 *pDst, const uint8 *pSrc, uint32 sz)
 {
     if(sz == 0) return;
     do

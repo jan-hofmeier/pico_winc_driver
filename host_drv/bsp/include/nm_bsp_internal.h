@@ -112,5 +112,9 @@
 #include "bsp/include/nm_bsp_arduino_uno.h"
 #endif
 
+#ifdef PICO_WINC
+#include "bsp/include/nm_bsp_pico.h"
+#endif
+
 
 #endif //_NM_BSP_INTERNAL_H_

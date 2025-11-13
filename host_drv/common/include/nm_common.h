@@ -161,7 +161,7 @@ extern "C" {
  *                  Destination buffer.
  * @return      None
  */
-NMI_API void m2m_memcpy(uint8 *pDst, uint8 *pSrc, uint32 sz);
+NMI_API void m2m_memcpy(uint8 *pDst, const uint8 *pSrc, uint32 sz);
 
 /*!
  * @ingroup     COMMONAPI
@@ -258,7 +258,7 @@ sint8 hexstr_2_bytes(uint8 *pu8Out, uint8 *pu8In, uint8 u8SizeOut);
  * @fn          void (*at_sb_printf)(const char *_format, ...);
  * @brief       Chooses which function to use in order to output debug.
  */
-NMI_API void (*at_sb_printf)(const char *_format, ...);
+NMI_API extern void (*at_sb_printf)(const char *_format, ...);
 #ifdef __cplusplus
 }
 #endif

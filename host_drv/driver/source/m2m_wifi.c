@@ -35,6 +35,8 @@
 #include "driver/include/m2m_wifi.h"
 #include "driver/source/m2m_hif.h"
 #include "driver/source/nmasic.h"
+#include <stdlib.h>
+
 #include <string.h>
 
 /* Require authentication of server. */
