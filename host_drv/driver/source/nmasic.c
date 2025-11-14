@@ -37,6 +37,7 @@
 #include "bsp/include/nm_bsp.h"
 #include "driver/source/nmasic.h"
 #include "driver/include/m2m_types.h"
+#include "pico_hal/compiler.h"
 
 #define NMI_GLB_RESET_0				(NMI_PERIPH_REG_BASE + 0x400)
 #define NMI_INTR_REG_BASE			(NMI_PERIPH_REG_BASE + 0xa00)

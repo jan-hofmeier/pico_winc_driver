@@ -37,6 +37,7 @@
 #include "nmi2c.h"
 #include "nmspi.h"
 #include "nmuart.h"
+#include "bus_wrapper/include/nm_bus_wrapper.h"
 
 #define MAX_TRX_CFG_SZ		8
 
