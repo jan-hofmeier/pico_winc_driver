@@ -5,6 +5,9 @@
 #include "driver/include/m2m_wifi.h"
 #include "socket/include/socket.h"
 
+#define WIFI_SSID "MY_SSID"
+#define WIFI_PASSWORD "MY_PASSWORD"
+
 static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
 {
     switch (u8MsgType)
@@ -48,7 +51,11 @@ int main()
     while (true)
     {
         m2m_wifi_handle_events(NULL);
-        sleep_ms(10);
+        printf("looping\n");
+        sleep_ms(1000);
     }
+
+    m2m_wifi_connect(WIFI_SSID, sizeof(WIFI_SSID), M2M_WIFI_SEC_WPA_PSK, WIFI_PASSWORD, M2M_WIFI_CH_ALL);
+
     return 0;
 }
