@@ -184,9 +184,7 @@ sint8 nm_bus_speed(uint8 level);
  *  @param      u16Sz Transfer length
  *  @return     ZERO in case of success and M2M_ERR_BUS_FAIL in case of failure
  */
-#ifdef CONF_WINC_USE_SPI
 sint8 nm_spi_rw(uint8* pu8Mosi, uint8* pu8Miso, uint16 u16Sz);
-#endif
 
 #ifdef __cplusplus
 	 }

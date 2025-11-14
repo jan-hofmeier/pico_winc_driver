@@ -358,7 +358,7 @@ sint8 nm_drv_init(void *pvInitVal)
 		goto _EXIT2;
 	}
 	
-	ret = nmi_update_firmware(pstrInitParam);
+	/*ret = nmi_update_firmware(pstrInitParam);
 	if(M2M_SUCCESS != ret) {
 		goto _EXIT2;
 	}
@@ -366,7 +366,7 @@ sint8 nm_drv_init(void *pvInitVal)
 	ret = nmi_init_chip(pstrInitParam);
 	if(M2M_SUCCESS != ret) {
 		goto _EXIT2;
-	}
+	}*/
 	
 	/*Initialize m2m_wifi module*/
 	ret = m2m_wifi_init(pstrInitParam);

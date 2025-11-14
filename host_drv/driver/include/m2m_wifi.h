@@ -111,6 +111,8 @@
 INCLUDES
 *=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*/
 #include <compiler.h>
+#include <stddef.h>
+#include <stdbool.h>
 #include "common/include/nm_common.h"
 #include "driver/include/m2m_types.h"
 #include "driver/source/nmdrv.h"
