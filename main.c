@@ -40,11 +40,13 @@ int main()
     memset(&param, 0, sizeof(param));
     param.pfAppWifiCb = wifi_callback;
 
-    if (m2m_wifi_init(&param) != M2M_SUCCESS)
+    printf("Calling nm_drv_init...\n");
+    if (nm_drv_init(&param) != M2M_SUCCESS)
     {
         printf("Failed to initialize WINC driver\n");
         while (1);
     }
+    printf("nm_drv_init returned successfully.\n");
 
     printf("WINC driver initialized\n");
 
