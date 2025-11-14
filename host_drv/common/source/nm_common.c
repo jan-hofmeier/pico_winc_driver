@@ -33,6 +33,8 @@
  */
 #include "common/include/nm_common.h"
 
+void (*at_sb_printf)(const char *_format, ...);
+
 void m2m_memcpy(uint8 *pDst, uint8 *pSrc, uint32 sz)
 {
     if(sz == 0) return;

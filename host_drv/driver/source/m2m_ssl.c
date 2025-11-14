@@ -39,6 +39,7 @@ INCLUDES
 #include "driver/include/m2m_ssl.h"
 #include "driver/source/m2m_hif.h"
 #include "driver/source/nmasic.h"
+#include "pico_hal/compiler.h"
 
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 MACROS

@@ -36,6 +36,7 @@
 #include "driver/source/m2m_hif.h"
 #include "driver/source/nmasic.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* Require authentication of server. */
 #define WIFI_1X_TLS_HS_FLAGS_PEER_AUTH          NBIT1
@@ -1386,8 +1387,8 @@ sint8 m2m_wifi_enable_ap(CONST tstrM2MAPConfig *pstrM2MAPConfig)
     tstrM2MAPModeConfig strM2MAPModeConfig;
 
     m2m_memcpy((uint8 *)&strM2MAPModeConfig.strApConfig, (uint8 *)pstrM2MAPConfig, sizeof(tstrM2MAPConfig));
-    m2m_memcpy(strM2MAPModeConfig.strApConfigExt.au8DefRouterIP, pstrM2MAPConfig->au8DHCPServerIP, 4);
-    m2m_memcpy(strM2MAPModeConfig.strApConfigExt.au8DNSServerIP, pstrM2MAPConfig->au8DHCPServerIP, 4);
+    m2m_memcpy(strM2MAPModeConfig.strApConfigExt.au8DefRouterIP, (uint8 *)pstrM2MAPConfig->au8DHCPServerIP, 4);
+    m2m_memcpy(strM2MAPModeConfig.strApConfigExt.au8DNSServerIP, (uint8 *)pstrM2MAPConfig->au8DHCPServerIP, 4);
 
     strM2MAPModeConfig.strApConfigExt.au8SubnetMask[0] = 0;
 
