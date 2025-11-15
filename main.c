@@ -36,6 +36,8 @@ int main()
     sleep_ms(2000);
     printf("Starting WINC driver initialization...\n");
 
+    nm_bsp_init();
+
     tstrWifiInitParam param;
     memset(&param, 0, sizeof(param));
     param.pfAppWifiCb = wifi_callback;
