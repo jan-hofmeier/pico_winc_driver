@@ -284,7 +284,7 @@ static sint8 spi_data_rsp(uint8 cmd)
 		
 	if((rsp[len-1] != 0)||(rsp[len-2] != 0xC3))
 	{
-		M2M_ERR("[nmi spi]: Failed data response read, %x %x %x\n",rsp[0],rsp[1],rsp[2]);
+		M2M_ERR("[nmi spi]: Failed data response read(%x), %x %x %x\n",len, rsp[0],rsp[1],rsp[2]);
 		result = N_FAIL;
 		goto _fail_;
 	}
@@ -596,6 +596,7 @@ _RETRY_:
 		goto _FAIL_;
 	}
 
+	printf("nm_spi_write: writing %X bytes\n", size);
 	/**
 		Data
 	**/
@@ -624,6 +625,8 @@ _FAIL_:
 		retry--;
 		if(retry) goto _RETRY_;
 	}
+
+	printf("write finsihed\n");
 
 
 	return result;

@@ -25,6 +25,31 @@ static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
         }
     }
     break;
+    case M2M_WIFI_RESP_SCAN_DONE:
+    {
+        tstrM2mScanDone *pstrScanDone = (tstrM2mScanDone *)pvMsg;
+        printf("Scan done, found %d APs\n", pstrScanDone->u8NumofCh);
+        if (pstrScanDone->u8NumofCh > 0)
+        {
+            m2m_wifi_req_scan_result(0);
+        }
+    }
+    break;
+    case M2M_WIFI_RESP_SCAN_RESULT:
+    {
+        tstrM2mWifiscanResult *pstrScanResult = (tstrM2mWifiscanResult *)pvMsg;
+        printf("AP: %s, RSSI: %d\n", pstrScanResult->au8SSID, pstrScanResult->s8rssi);
+        static uint8_t scan_index = 1;
+        if (scan_index < m2m_wifi_get_num_ap_found())
+        {
+            m2m_wifi_req_scan_result(scan_index++);
+        }
+        else
+        {
+            scan_index = 1;
+        }
+    }
+    break;
     default:
         break;
     }
@@ -43,7 +68,7 @@ int main()
     param.pfAppWifiCb = wifi_callback;
 
     printf("Calling nm_drv_init...\n");
-    if (nm_drv_init(&param) != M2M_SUCCESS)
+    if (m2m_wifi_init(&param) != M2M_SUCCESS)
     {
         printf("Failed to initialize WINC driver\n");
         while (1);
@@ -52,14 +77,13 @@ int main()
 
     printf("WINC driver initialized\n");
 
+    m2m_wifi_request_scan(M2M_WIFI_CH_ALL);
+
     while (true)
     {
         m2m_wifi_handle_events(NULL);
-        printf("looping\n");
-        sleep_ms(1000);
+        sleep_ms(100);
     }
-
-    m2m_wifi_connect(WIFI_SSID, sizeof(WIFI_SSID), M2M_WIFI_SEC_WPA_PSK, WIFI_PASSWORD, M2M_WIFI_CH_ALL);
 
     return 0;
 }
