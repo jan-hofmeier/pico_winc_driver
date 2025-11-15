@@ -50,11 +50,9 @@
 #define M2M_LOG_REQ										3
 #define M2M_LOG_DBG										4
 
-#if (defined __APS3_CORTUS__)
-#define M2M_LOG_LEVEL									M2M_LOG_INFO
-#else
-#define M2M_LOG_LEVEL									M2M_LOG_REQ
-#endif
+#define CONF_WINC_PRINTF printf
+#define CONF_WINC_DEBUG 1
+#define M2M_LOG_LEVEL M2M_LOG_DBG
 
 
 #define M2M_ERR(...)
