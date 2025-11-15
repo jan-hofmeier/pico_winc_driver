@@ -44,7 +44,7 @@
 
 #include "bsp/include/nm_bsp.h"
 #include "bsp/include/nm_bsp_internal.h"
-#include <stdio.h> // Added for printf
+#include "conf_winc.h"
 
 /**@defgroup  DebugDefines DebugDefines
  * @ingroup WlanDefines

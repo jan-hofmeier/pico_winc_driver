@@ -4,7 +4,9 @@
 #include "conf_winc.h"
 #include "math.h"
 
-#define NM_EDGE_INTERRUPT (1)
+#define CONF_WINC_USE_SPI
+
+#define NM_EDGE_INTERRUPT 1
 
 #define NM_DEBUG CONF_WINC_DEBUG
 #define NM_BSP_PRINTF CONF_WINC_PRINTF

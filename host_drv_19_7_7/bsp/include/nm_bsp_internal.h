@@ -38,7 +38,11 @@
 #ifndef _NM_BSP_INTERNAL_H_
 #define _NM_BSP_INTERNAL_H_
 
+#include "conf_winc.h"
 
+#ifdef CONF_WINC_USE_PICO
+#include "bsp/include/nm_bsp_pico.h"
+#endif
 
 #ifdef WIN32
 #include "nm_bsp_win32.h"

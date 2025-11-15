@@ -42,6 +42,9 @@
  * @ingroup nm_bsp
  * @{
  */
+
+#include "conf_winc.h"
+
 #ifndef _NM_BSP_INTERNAL_H_
 #define _NM_BSP_INTERNAL_H_
 

@@ -37,7 +37,7 @@
 
 #include "bsp/include/nm_bsp.h"
 #include "bsp/include/nm_bsp_internal.h"
-#include "stdio.h"
+#include "conf_winc.h"
 
 /**@defgroup  DebugDefines DebugDefines
  * @ingroup WlanDefines
@@ -50,10 +50,6 @@
 #define M2M_LOG_INFO									2
 #define M2M_LOG_REQ										3
 #define M2M_LOG_DBG										4
-
-#define CONF_WINC_PRINTF printf
-#define CONF_WINC_DEBUG 1
-#define M2M_LOG_LEVEL M2M_LOG_DBG
 
 
 #define M2M_ERR(...)

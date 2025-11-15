@@ -39,7 +39,6 @@
  *
  */
 
-#include "conf_winc.h"
 
 #include "common/include/nm_common.h"
 #include "driver/source/nmbus.h"
