@@ -63,10 +63,11 @@ This command is used to read a single word from a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | Data[7:0]          |
-| 1     | Data[15:8]         |
-| 2     | Data[23:16]        |
-| 3     | Data[31:24]        |
+| 0     | `CMD_SINGLE_READ`  |
+| 1     | Data[7:0]          |
+| 2     | Data[15:8]         |
+| 3     | Data[23:16]        |
+| 4     | Data[31:24]        |
 
 ### `CMD_INTERNAL_WRITE`
 
@@ -86,7 +87,10 @@ This command is used to write to an internal register.
 
 **Response:**
 
-None.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_INTERNAL_WRITE`|
+| 1     | Status             |
 
 ### `CMD_RESET`
 
@@ -100,7 +104,10 @@ This command is used to reset the WINC1500.
 
 **Response:**
 
-None.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_RESET`        |
+| 1     | Status             |
 
 ### `CMD_SINGLE_WRITE`
 
@@ -121,7 +128,10 @@ This command is used to write a single word to a register.
 
 **Response:**
 
-None.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_SINGLE_WRITE` |
+| 1     | Status             |
 
 ### `CMD_INTERNAL_READ`
 
@@ -139,10 +149,11 @@ This command is used to read from an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | Data[7:0]          |
-| 1     | Data[15:8]         |
-| 2     | Data[23:16]        |
-| 3     | Data[31:24]        |
+| 0     | `CMD_INTERNAL_READ`|
+| 1     | Data[7:0]          |
+| 2     | Data[15:8]         |
+| 3     | Data[23:16]        |
+| 4     | Data[31:24]        |
 
 ### `CMD_DMA_EXT_READ`
 
@@ -162,7 +173,10 @@ This command is used to read a block of data from memory using extended DMA.
 
 **Response:**
 
-A block of data of the specified size.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_DMA_EXT_READ` |
+| 1..n  | Data               |
 
 ### `CMD_DMA_EXT_WRITE`
 
@@ -186,7 +200,10 @@ A block of data of the specified size.
 
 **Response:**
 
-None.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_DMA_EXT_WRITE`|
+| 1     | Status             |
 
 ### `CMD_DMA_READ`
 
@@ -205,7 +222,10 @@ This command is used to read a block of data from memory using DMA.
 
 **Response:**
 
-A block of data of the specified size.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_DMA_READ`     |
+| 1..n  | Data               |
 
 ### `CMD_DMA_WRITE`
 
@@ -228,7 +248,18 @@ A block of data of the specified size.
 
 **Response:**
 
-None.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `CMD_DMA_WRITE`    |
+| 1     | Status             |
+
+## Command Response
+
+After sending a command, the host must read the SPI bus to receive a response from the WINC1500. The first byte of the response is always an echo of the command that was sent.
+
+For write commands, the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error.
+
+For read commands, the second byte of the response is the first byte of the requested data.
 
 ## Interrupt Handling
 
@@ -313,6 +344,49 @@ This command is used to connect to a Wi-Fi network.
 | `Auth_Info`        | `void*`   | A pointer to a structure containing authentication information. |
 | `Channel`          | `uint16`  | The channel to connect to.                        |
 
+## HIF Transaction Flow
+
+This section describes the sequence of operations required to send a HIF command to the WINC1500 and to process a response received from it.
+
+### Sending a HIF Command
+
+Sending a HIF command involves requesting a buffer from the WINC1500, writing the command and its payload to that buffer, and then notifying the firmware that the command is ready for processing.
+
+1.  **Wake the Chip:** Before any transaction, ensure the chip is awake by writing `0x1` to the `WAKE_CLK_REG` (address `0x1`) and polling the `CLOCKS_EN_REG` (address `0xF`) until bit 2 (`CLK_EN`) is set.
+
+2.  **Request a DMA Buffer:**
+    a. Prepare the request details. This involves combining the `Group ID`, `Opcode`, and total packet `Length` (HIF Header + Payload) into a 32-bit value and writing it to the `NMI_STATE_REG` (address `0x108C`). The format is `(Length << 16) | (Opcode << 8) | Group ID`.
+    b. Signal the request to the firmware by setting bit 1 (`RX_REQ`) of the `WIFI_HOST_RCV_CTRL_2` register (address `0x1078`).
+    c. Poll bit 1 of `WIFI_HOST_RCV_CTRL_2` until the firmware clears it. This indicates that a buffer has been allocated.
+    d. Read the 32-bit DMA address of the allocated buffer from the `WIFI_HOST_RCV_CTRL_4` register (address `0x1504`).
+
+3.  **Write the HIF Packet:**
+    a. Create the 4-byte `HIF Header` in host memory.
+    b. Use the `CMD_DMA_EXT_WRITE` SPI command to transfer the `HIF Header` and the command `Payload` to the DMA address obtained in the previous step. The payload (if any) should be placed immediately after the header.
+
+4.  **Notify Firmware of Completion:**
+    a. Prepare a 32-bit notification value by taking the DMA address, shifting it left by 2 bits, and setting bit 1. For example: `(dma_address << 2) | 0x2`.
+    b. Write this notification value to the `WIFI_HOST_RCV_CTRL_3` register (address `0x106C`). This signals to the firmware that the data has been written and is ready for processing.
+
+### Receiving a HIF Response (Interrupt-Driven)
+
+Receiving a response is typically handled in an interrupt service routine (ISR) that is triggered by the WINC1500.
+
+1.  **Interrupt Trigger:** The WINC1500 asserts the host's interrupt pin.
+
+2.  **Acknowledge and Read Status:** In the ISR, the host must first read the `WIFI_HOST_RCV_CTRL_0` register (address `0x1070`).
+    a. Check if bit 0 (`RX_DONE`) is set. If it is, a new packet is available.
+    b. The size of the available packet (in bytes) is contained in bits 11:2 of this same register value.
+
+3.  **Get Packet Address:** Read the 32-bit DMA address where the received packet is stored from the `WIFI_HOST_RCV_CTRL_1` register (address `0x1084`).
+
+4.  **Read the HIF Packet:**
+    a. Use the `CMD_DMA_EXT_READ` SPI command to read the entire packet (or just the 4-byte header first) from the DMA address obtained in the previous step.
+    b. Parse the `HIF Header` to determine the `Group ID` and `Opcode` of the response.
+    c. Based on the Group ID and Opcode, the host application can now read and process the payload of the packet.
+
+5.  **Signal Completion to Firmware:** After the host has finished processing the packet and reading all necessary data from the DMA buffer, it **must** notify the firmware that the buffer is now free. This is done by setting bit 1 (`RX_DONE`) of the `WIFI_HOST_RCV_CTRL_0` register (address `0x1070`).
+
 ## Chip Initialization Sequence
 
 The following sequence must be followed to initialize the WINC1500:
@@ -320,12 +394,11 @@ The following sequence must be followed to initialize the WINC1500:
 1.  **Reset the chip:** Send the `CMD_RESET` command to reset the chip.
 2.  **Read the chip ID:** Read the `CHIPID` register to verify that the chip is present and responding. The expected value is `0x1002a0`.
 3.  **Configure the SPI protocol:** Write `0x00000054` to the `NMI_SPI_PROTOCOL_CONFIG` register to configure the SPI protocol with CRC enabled and a packet size of 8192 bytes. `NMI_SPI_PROTOCOL_CONFIG` is at address `0xE824`.
-5.  **Enable interrupts:** Write `0x00000001` to the `NMI_INTR_ENABLE` register to enable interrupts.
-6.  **Configure clocks:** Write `0x00000002` to the `WAKE_CLK_REG` register and `0x00000004` to the `CLOCKS_EN_REG` register to configure the clocks.
-7.  **Load the firmware:** Write the firmware to the WINC1500's memory at address `0x0000` using the `CMD_DMA_EXT_WRITE` command.
-8.  **Verify the firmware:** Read the firmware from the WINC1500's memory at address `0x0000` using the `CMD_DMA_EXT_READ` command and verify it against the original firmware.
-9.  **Start the firmware:** Write `0x00000001` to the `BOOTROM_REG` register to start the firmware.
-10. **Wait for the firmware to start:** Poll the `NMI_STATE_REG` register until it is equal to `0x00000001`.
+4.  **Enable interrupts:** Write `0x00000001` to the `NMI_INTR_ENABLE` register to enable interrupts.
+6.  **Load the firmware:** Write the firmware to the WINC1500's memory at address `0x0000` using the `CMD_DMA_EXT_WRITE` command.
+7.  **Verify the firmware:** Read the firmware from the WINC1500's memory at address `0x0000` using the `CMD_DMA_EXT_READ` command and verify it against the original firmware.
+8.  **Start the firmware:** Write `0x00000001` to the `BOOTROM_REG` register to start the firmware.
+9.  **Wait for the firmware to start:** Poll the `NMI_STATE_REG` register until it is equal to `0x00000001`.
 
 ## State Machine
 
