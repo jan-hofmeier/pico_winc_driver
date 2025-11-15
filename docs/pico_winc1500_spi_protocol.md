@@ -344,6 +344,58 @@ This command is used to connect to a Wi-Fi network.
 | `Auth_Info`        | `void*`   | A pointer to a structure containing authentication information. |
 | `Channel`          | `uint16`  | The channel to connect to.                        |
 
+#### `M2M_WIFI_REQ_DISCONNECT`
+
+This command is used to disconnect from a Wi-Fi network.
+
+**Payload:**
+
+None.
+
+#### `M2M_WIFI_REQ_SCAN`
+
+This command is used to scan for available Wi-Fi networks.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Channel`  | `uint8` | The channel to scan. Use `M2M_WIFI_CH_ALL` to scan all channels. |
+
+#### `SOCKET_CMD_BIND`
+
+This command is used to bind a socket to a local address.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Socket`   | `uint8` | The socket to bind.                               |
+| `Address`  | `struct sockaddr_in` | The local address to bind to.                    |
+
+#### `SOCKET_CMD_CONNECT`
+
+This command is used to initiate a connection on a socket.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Socket`   | `uint8` | The socket to connect.                            |
+| `Address`  | `struct sockaddr_in` | The remote address to connect to.                 |
+
+#### `SOCKET_CMD_SEND`
+
+This command is used to send data on a socket.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Socket`   | `uint8` | The socket to send data on.                       |
+| `Data`     | `char[]`| The data to send.                                 |
+| `Length`   | `uint16`| The length of the data to send.                   |
+
 ## HIF Transaction Flow
 
 This section describes the sequence of operations required to send a HIF command to the WINC1500 and to process a response received from it.
