@@ -37,6 +37,7 @@
 
 #include "bsp/include/nm_bsp.h"
 #include "bsp/include/nm_bsp_internal.h"
+#include "stdio.h"
 
 /**@defgroup  DebugDefines DebugDefines
  * @ingroup WlanDefines
