@@ -5,8 +5,7 @@
 #include "driver/include/m2m_wifi.h"
 #include "socket/include/socket.h"
 
-#define WIFI_SSID "MY_SSID"
-#define WIFI_PASSWORD "MY_PASSWORD"
+#include "wifi_credentials.h"
 
 static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
 {
@@ -17,7 +16,7 @@ static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
         tstrM2mWifiStateChanged *pstrWifiState = (tstrM2mWifiStateChanged *)pvMsg;
         if (pstrWifiState->u8CurrState == M2M_WIFI_CONNECTED)
         {
-            printf("Wi-Fi connected\n");
+            printf("Wi-Fi connected to %s\n", WIFI_SSID);
         }
         else if (pstrWifiState->u8CurrState == M2M_WIFI_DISCONNECTED)
         {
@@ -33,6 +32,9 @@ static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
         {
             m2m_wifi_req_scan_result(0);
         }
+        // After scan, attempt to connect to the defined network
+        printf("Attempting to connect to %s...\n", WIFI_SSID);
+        m2m_wifi_connect((char *)WIFI_SSID, sizeof(WIFI_SSID), M2M_WIFI_SEC_WPA_PSK, (char *)WIFI_PASSWORD, M2M_WIFI_CH_ALL);
     }
     break;
     case M2M_WIFI_RESP_SCAN_RESULT:
