@@ -58,7 +58,7 @@ static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
 int main()
 {
     stdio_init_all();
-    sleep_ms(2000);
+    sleep_ms(2000); // Increased sleep for serial capture
     printf("Starting WINC driver initialization...\n");
 
     nm_bsp_init();
