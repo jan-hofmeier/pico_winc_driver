@@ -2,8 +2,9 @@
 #include "pico/stdlib.h"
 #include <string.h>
 
-#include "driver/include/m2m_wifi.h"
-#include "socket/include/socket.h"
+#include "conf_winc.h"
+#include "m2m_wifi.h"
+#include "socket.h"
 
 #include "wifi_credentials.h"
 

@@ -1,7 +1,7 @@
 #include "bsp/include/nm_bsp.h"
 #include "common/include/nm_common.h"
 #include "bus_wrapper/include/nm_bus_wrapper.h"
-#include "host_drv/conf_winc.h"
+#include "conf_winc.h"
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 #include "hardware/gpio.h"

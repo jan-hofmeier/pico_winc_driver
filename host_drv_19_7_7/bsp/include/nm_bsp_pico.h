@@ -1,7 +1,7 @@
 #ifndef _NM_BSP_PICO_H_
 #define _NM_BSP_PICO_H_
 
-#include "host_drv/conf_winc.h"
+#include "conf_winc.h"
 #include "math.h"
 
 #define NM_EDGE_INTERRUPT (1)

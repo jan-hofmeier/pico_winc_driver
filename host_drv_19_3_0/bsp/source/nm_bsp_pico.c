@@ -1,7 +1,7 @@
 #include "bsp/include/nm_bsp.h"
 #include "bsp/include/nm_bsp_internal.h"
 #include "common/include/nm_common.h"
-#include "host_drv/conf_winc.h"
+#include "conf_winc.h"
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include <stdio.h>
