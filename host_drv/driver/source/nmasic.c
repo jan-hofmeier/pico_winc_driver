@@ -32,6 +32,9 @@
  *
  */
 
+#define LOW 0
+#define HIGH 1
+
 #include "common/include/nm_common.h"
 #include "driver/source/nmbus.h"
 #include "bsp/include/nm_bsp.h"

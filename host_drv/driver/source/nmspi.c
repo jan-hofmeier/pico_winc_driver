@@ -31,6 +31,7 @@
  * \asf_license_stop
  *
  */
+#include "conf_winc.h"
 #include "common/include/nm_common.h"
 
 #ifdef CONF_WINC_USE_SPI

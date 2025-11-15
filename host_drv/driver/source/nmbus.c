@@ -33,6 +33,7 @@
  */
 #ifndef CORTUS_APP
 
+#include "conf_winc.h"
 #include "nmbus.h"
 #include "nmi2c.h"
 #include "nmspi.h"

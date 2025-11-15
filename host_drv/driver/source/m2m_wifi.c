@@ -36,6 +36,7 @@
 #include "driver/source/m2m_hif.h"
 #include "driver/source/nmasic.h"
 #include <string.h>
+#include <stdlib.h>
 
 /* Require authentication of server. */
 #define WIFI_1X_TLS_HS_FLAGS_PEER_AUTH          NBIT1
