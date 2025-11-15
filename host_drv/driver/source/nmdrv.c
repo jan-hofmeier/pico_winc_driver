@@ -1,3 +1,37 @@
+/**
+ *
+ * \file
+ *
+ * \brief This module contains NMC1000 M2M driver APIs implementation.
+ *
+ * Copyright (c) 2016-2018 Microchip Technology Inc. and its subsidiaries.
+ *
+ * \asf_license_start
+ *
+ * \page License
+ *
+ * Subject to your compliance with these terms, you may use Microchip
+ * software and any derivatives exclusively with Microchip products.
+ * It is your responsibility to comply with third party license terms applicable
+ * to your use of third party software (including open source software) that
+ * may accompany Microchip software.
+ *
+ * THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS". NO WARRANTIES,
+ * WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE,
+ * INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY,
+ * AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT WILL MICROCHIP BE
+ * LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE, INCIDENTAL OR CONSEQUENTIAL
+ * LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND WHATSOEVER RELATED TO THE
+ * SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN ADVISED OF THE
+ * POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST EXTENT
+ * ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+ * RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
+ * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
+ *
+ * \asf_license_stop
+ *
+ */
+
 #include "common/include/nm_common.h"
 #include "driver/source/nmbus.h"
 #include "bsp/include/nm_bsp.h"
@@ -5,14 +39,6 @@
 #include "driver/source/nmasic.h"
 #include "driver/include/m2m_types.h"
 #include "spi_flash/include/spi_flash.h"
-#include "driver/include/m2m_wifi.h"
-#include "driver/source/m2m_hif.h"
-#include "bus_wrapper/include/nm_bus_wrapper.h"
-#include "socket/include/socket.h"
-#include <stdio.h>
-
-uint16 gu16HIF_MAX_PACKET_SIZE = 1500;
-uint8 gu8EnableSecurity = 1;
 
 #ifdef CONF_WINC_USE_SPI
 #include "driver/source/nmspi.h"
@@ -329,60 +355,15 @@ ERR1:
 *	@date	15 July 2012
 *	@version	1.0
 */
-sint8 nm_drv_init(void *pvInitVal)
+sint8 nm_drv_init(void * arg)
 {
-	tstrWifiInitParam *pstrInitParam = (tstrWifiInitParam *)pvInitVal;
 	sint8 ret = M2M_SUCCESS;
 
-	printf("nm_drv_init\n");
+	ret = nm_drv_init_hold();
 
-	if (pstrInitParam != NULL) {
-		//gu16HIF_MAX_PACKET_SIZE = pstrInitParam->u16HifMaxPktSize;
-		//gu8EnableSecurity = pstrInitParam->u8EnbSecurity;
-	}
-	
-	/*Initialize host interface module*/
-	ret = hif_init(pstrInitParam);
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT0;
-	}
+	if(ret == M2M_SUCCESS)
+		ret = nm_drv_init_start(arg);
 
-	/*Initialize bus module*/
-	ret = nm_bus_init(NULL);
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT1;
-	}
-	
-	ret = nmi_get_chipid();
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT2;
-	}
-	
-	/*ret = nmi_update_firmware(pstrInitParam);
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT2;
-	}
-	
-	ret = nmi_init_chip(pstrInitParam);
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT2;
-	}*/
-	
-	/*Initialize m2m_wifi module*/
-	ret = m2m_wifi_init(pstrInitParam);
-	if(M2M_SUCCESS != ret) {
-		goto _EXIT2;
-	}
-	
-	/*Initialize socket module*/
-	socketInit();
-
-	return ret;
-_EXIT2:
-	nm_bus_deinit();
-_EXIT1:
-	hif_deinit(NULL);
-_EXIT0:
 	return ret;
 }
 

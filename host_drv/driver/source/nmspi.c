@@ -33,6 +33,8 @@
  */
 #include "common/include/nm_common.h"
 
+#ifdef CONF_WINC_USE_SPI
+
 #include "bus_wrapper/include/nm_bus_wrapper.h"
 #include "nmspi.h"
 
@@ -924,3 +926,5 @@ sint8 nm_spi_write_block(uint32 u32Addr, uint8 *puBuf, uint16 u16Sz)
 
 	return s8Ret;
 }
+
+#endif

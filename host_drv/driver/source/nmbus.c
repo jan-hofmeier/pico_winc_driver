@@ -37,7 +37,6 @@
 #include "nmi2c.h"
 #include "nmspi.h"
 #include "nmuart.h"
-#include "host_drv/conf_winc.h"
 
 #define MAX_TRX_CFG_SZ		8
 
