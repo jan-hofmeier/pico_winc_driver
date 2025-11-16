@@ -9,8 +9,8 @@
 #include "iot/http/http_client.h" // New include for HTTP client
 #include "wifi_credentials.h"
 
-#define MAIN_HTTP_CLIENT_URL "fedoraproject.org"
-#define MAIN_HTTP_CLIENT_PATH "/static/hotspot.txt"
+#define MAIN_HTTP_CLIENT_URL "httpbin.org"
+#define MAIN_HTTP_CLIENT_PATH "/anything"
 #define MAIN_HTTP_CLIENT_PORT 80
 #define MAIN_WIFI_M2M_BUFFER_SIZE 4096 // Increased buffer size
 
@@ -24,6 +24,9 @@ static uint8_t gau8RxBuffer[MAIN_WIFI_M2M_BUFFER_SIZE];
 static struct http_client_module http_client_instance;
 volatile bool is_connected = false;
 
+static uint8_t u8NumFoundAPs = 0;
+static uint8_t u8ScanResultIdx = 0;
+
 static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
 {
     switch (u8MsgType)
@@ -34,38 +37,80 @@ static void wifi_callback(uint8_t u8MsgType, void *pvMsg)
         if (pstrWifiState->u8CurrState == M2M_WIFI_CONNECTED)
         {
             printf("Wi-Fi Connected\n");
-            //m2m_wifi_request_dhcp_client();
+            //m2m_wifi_request_dhcp_client(); // DHCP is requested automatically
         }
         else if (pstrWifiState->u8CurrState == M2M_WIFI_DISCONNECTED)
         {
             printf("Wi-Fi Disconnected\n");
-            m2m_wifi_connect((char *)WIFI_SSID, strlen(WIFI_SSID),
-                             M2M_WIFI_SEC_WPA_PSK, (void *)WIFI_PASSWORD, M2M_WIFI_CH_ALL);
+            // Re-scan or re-connect logic can go here if needed
+            // For now, let's just re-initiate a scan
+            m2m_wifi_request_scan(M2M_WIFI_CH_ALL);
         } else {
             printf("Wifi state: %d\n", pstrWifiState->u8CurrState);
         }
         break;
     }
-            case M2M_WIFI_REQ_DHCP_CONF:
+    case M2M_WIFI_REQ_DHCP_CONF:
+    {
+        uint8 *pu8IPAddress = (uint8 *)pvMsg;
+        printf("Wi-Fi IP Address is %u.%u.%u.%u\n", pu8IPAddress[0], pu8IPAddress[1], pu8IPAddress[2], pu8IPAddress[3]);
+        host_ip = 1; // Indicate that we have an IP address
+        break;
+    }
+    case M2M_WIFI_RESP_SCAN_DONE:
+    {
+        tstrM2mScanDone *pstrInfo = (tstrM2mScanDone *)pvMsg;
+        printf("Scan Done: Number of APs found: %d\n", pstrInfo->u8NumofCh);
+        u8NumFoundAPs = pstrInfo->u8NumofCh;
+        u8ScanResultIdx = 0;
+        if (u8NumFoundAPs > 0)
+        {
+            m2m_wifi_req_scan_result(u8ScanResultIdx);
+        }
+        else
+        {
+            printf("No APs found, re-scanning...\n");
+            m2m_wifi_request_scan(M2M_WIFI_CH_ALL);
+        }
+        break;
+    }
+    case M2M_WIFI_RESP_SCAN_RESULT:
+    {
+        tstrM2mWifiscanResult *pstrScanResult = (tstrM2mWifiscanResult *)pvMsg;
+        printf("SSID: %s, RSSI: %d, Auth: %d, Channel: %d\n",
+               pstrScanResult->au8SSID, pstrScanResult->s8rssi,
+               pstrScanResult->u8AuthType, pstrScanResult->u8ch);
+
+        if (strcmp((const char*)pstrScanResult->au8SSID, WIFI_SSID) == 0)
+        {
+            printf("Found desired AP: %s, connecting...\n", WIFI_SSID);
+            m2m_wifi_connect((char *)WIFI_SSID, strlen(WIFI_SSID),
+                             M2M_WIFI_SEC_WPA_PSK, (void *)WIFI_PASSWORD, M2M_WIFI_CH_ALL);
+        }
+        else
+        {
+            u8ScanResultIdx++;
+            if (u8ScanResultIdx < u8NumFoundAPs)
             {
-                uint8 *pu8IPAddress = (uint8 *)pvMsg;
-                printf("Wi-Fi IP Address is %u.%u.%u.%u\n", pu8IPAddress[0], pu8IPAddress[1], pu8IPAddress[2], pu8IPAddress[3]);
-                host_ip = 1; // Indicate that we have an IP address
-                break;
+                m2m_wifi_req_scan_result(u8ScanResultIdx);
             }
-            case 27: // M2M_WIFI_REQ_CLIENT_GAINED_IP
+            else
             {
-                printf("WINC Client Gained IP (Opcode 27) - Message Consumed\n");
-                break;
+                printf("Desired AP not found, re-scanning...\n");
+                m2m_wifi_request_scan(M2M_WIFI_CH_ALL);
             }
-            default:
-                printf("Wifi Callback Message %d\n", u8MsgType);    }
+        }
+        break;
+    }
+    default:
+        printf("Wifi Callback Message %d\n", u8MsgType);
+    }
 }
 
 
 
 // HTTP client callback
-static void http_client_callback(struct http_client_module *module, enum http_client_callback_type type, union http_client_data *data)
+static void http_client_callback(struct http_client_module *module, int type, union http_client_data *data)
 {
     switch (type)
     {
@@ -99,23 +144,20 @@ static void http_client_callback(struct http_client_module *module, enum http_cl
     case HTTP_CLIENT_CALLBACK_REQUEST_TIMEOUT:
         printf("HTTP_CLIENT_CALLBACK_REQUEST_TIMEOUT\n");
         break;
+
+    default:
+        printf("Unhandled HTTP event type:%d\n", type);
     }
+
+
 }
 
-
-
-
-
 static void wrapped_socket_event_handler(SOCKET sock, uint8_t msg_type, void *msg_data) {
-    printf("Entering wrapped_socket_event_handler (sock: %d, msg_type: %d)\n", sock, msg_type);
     http_client_socket_event_handler(sock, msg_type, msg_data);
-    printf("Exiting wrapped_socket_event_handler\n");
 }
 
 static void wrapped_socket_resolve_handler(uint8_t *doamin_name, uint32_t server_ip) {
-    printf("Entering wrapped_socket_resolve_handler (domain: %s, IP: %lu)\n", doamin_name, server_ip);
     http_client_socket_resolve_handler(doamin_name, server_ip);
-    printf("Exiting wrapped_socket_resolve_handler\n");
 }
 
 int main()
@@ -139,22 +181,27 @@ int main()
     printf("nm_drv_init returned successfully.\n");
     
     socketInit(); // Explicitly call socketInit()
+
+    printf("WINC driver initialized\n");
     
     // Initialize the HTTP client module.
     struct http_client_config client_config;
     http_client_get_config_defaults(&client_config);
-        client_config.recv_buffer = gau8RxBuffer;
-        client_config.recv_buffer_size = sizeof(gau8RxBuffer);
-        client_config.user_agent = MAIN_HTTP_CLIENT_USER_AGENT;
-        http_client_init(&http_client_instance, &client_config);
+    client_config.recv_buffer = gau8RxBuffer;
+    client_config.recv_buffer_size = sizeof(gau8RxBuffer);
+    client_config.user_agent = MAIN_HTTP_CLIENT_USER_AGENT;
+    client_config.port = MAIN_HTTP_CLIENT_PORT; // Set the port
+    client_config.tls = 0; // Disable TLS
+    http_client_init(&http_client_instance, &client_config);
 
-        // Register the HTTP client's socket event and DNS resolution handlers
-        registerSocketCallback(wrapped_socket_event_handler, wrapped_socket_resolve_handler);
-    
-        printf("WINC driver initialized\n");
+    http_client_register_callback(&http_client_instance, http_client_callback);
 
-    // Connect to Wi-Fi directly
-    m2m_wifi_connect((char *)WIFI_SSID, strlen(WIFI_SSID), M2M_WIFI_SEC_WPA_PSK, (char *)WIFI_PASSWORD, M2M_WIFI_CH_ALL);
+    // Register the HTTP client's socket event and DNS resolution handlers
+    registerSocketCallback(wrapped_socket_event_handler, wrapped_socket_resolve_handler);
+
+    // Start Wi-Fi scan
+    printf("Starting Wi-Fi scan...\n");
+    m2m_wifi_request_scan(M2M_WIFI_CH_ALL);
 
     while (true)
     {
