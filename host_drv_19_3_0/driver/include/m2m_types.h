@@ -55,6 +55,8 @@ INCLUDES
 #endif
 #endif
 
+#include "conf_winc.h"
+
 
 /*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*
 MACROS
@@ -1752,6 +1754,9 @@ typedef struct {
 	uint32 	u32SubnetMask;
 	/*!< Subnet mask for the local area network.
 	*/
+	#ifdef FW19_4_10_MODE
+	uint32  u32DhcpLeaseTime;
+	#endif
 } tstrM2MIPConfig;
 
 /*!

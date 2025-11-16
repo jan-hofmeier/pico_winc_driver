@@ -18,6 +18,10 @@ extern "C" {
 #define CONF_WINC_SPI_SCK_PIN 10
 #define CONF_WINC_SPI_INT_PIN 9
 
+#define CONF_MGMT
+
+#define FW19_4_10_MODE
+
 // </h>
 
 // <h> WINC Pico Specific Configuration
