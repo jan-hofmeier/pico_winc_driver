@@ -3,13 +3,7 @@
 #include "pico/stdlib.h"
 #include "pico/spi.h"
 #include "winc1500_registers.h"
-
-// SPI Defines
-#define SPI_PORT spi0
-#define PIN_MISO 16
-#define PIN_CS   17
-#define PIN_SCK  18
-#define PIN_MOSI 19
+#include "conf_pico_winc_simulator.h"
 
 // WINC1500 Memory Simulation (256KB)
 #define WINC_MEM_SIZE (256 * 1024)
@@ -122,10 +116,10 @@ int main() {
     spi_set_slave(SPI_PORT, true);
 
     // GPIO pin setup
-    gpio_set_function(PIN_MISO, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_SCK,  GPIO_FUNC_SPI);
-    gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
-    gpio_set_function(PIN_CS,   GPIO_FUNC_SPI);
+    gpio_set_function(MISO_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(SCK_PIN,  GPIO_FUNC_SPI);
+    gpio_set_function(MOSI_PIN, GPIO_FUNC_SPI);
+    gpio_set_function(CS_PIN,   GPIO_FUNC_SPI);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands...\\n");
 
