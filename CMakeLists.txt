@@ -34,6 +34,7 @@ if(WINC_DRIVER_VERSION STREQUAL "19_7_7")
         host_drv_19_7_7/spi_flash/source/spi_flash.c
         host_drv_19_7_7/bsp/source/nm_bsp_pico.c
         host_drv_19_7_7/bus_wrapper/source/nm_bus_wrapper_pico.c
+        iot/http/http_client.c
     )
     target_include_directories(pico_winc_driver PUBLIC
         .
@@ -44,6 +45,7 @@ if(WINC_DRIVER_VERSION STREQUAL "19_7_7")
         host_drv_19_7_7/bus_wrapper/include
         host_drv_19_7_7/socket/include
         host_drv_19_7_7/spi_flash/include
+        iot/http
     )
 elseif(WINC_DRIVER_VERSION STREQUAL "19_3_0")
     target_sources(pico_winc_driver PRIVATE
@@ -61,6 +63,7 @@ elseif(WINC_DRIVER_VERSION STREQUAL "19_3_0")
         host_drv_19_3_0/spi_flash/source/spi_flash.c
         host_drv_19_3_0/bsp/source/nm_bsp_pico.c
         host_drv_19_3_0/bus_wrapper/source/nm_bus_wrapper_pico.c
+        iot/http/http_client.c
     )
     target_include_directories(pico_winc_driver PUBLIC
         .
@@ -71,6 +74,7 @@ elseif(WINC_DRIVER_VERSION STREQUAL "19_3_0")
         host_drv_19_3_0/bus_wrapper/include
         host_drv_19_3_0/socket/include
         host_drv_19_3_0/spi_flash/include
+        iot/http
     )
 else()
     message(FATAL_ERROR "Invalid WINC_DRIVER_VERSION selected: ${WINC_DRIVER_VERSION}")
