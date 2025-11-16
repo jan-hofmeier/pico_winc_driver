@@ -20,6 +20,10 @@ extern "C" {
 
 #define CONF_MGMT
 
+
+// Somwhere between the 19.3.0 driver and the 19.4.10 firmware a struct changed.
+// this caused this error: (APP)(ERR)[hif_isr][539](hif) host app didn't set RX Done
+// Since I couldn't find the 19.4.10 driver I patched the 19.3.0 driver
 #define FW19_4_10_MODE
 
 // </h>
