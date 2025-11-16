@@ -11,7 +11,11 @@ extern "C" {
 #define CONF_WINC_PIN_RESET 6
 #define CONF_WINC_PIN_WAKE 8
 
+#ifdef COMBINED_BUILD
 #define CONF_WINC_SPI_PORT spi1
+#else
+#define CONF_WINC_SPI_PORT spi0
+#endif
 #define CONF_WINC_SPI_CS_PIN 13
 #define CONF_WINC_SPI_MISO_PIN 12
 #define CONF_WINC_SPI_MOSI_PIN 11
@@ -41,6 +45,8 @@ extern "C" {
 #define CONF_WINC_DEBUG 1
 #define M2M_LOG_LEVEL 4
 #define CONF_WINC_PRINTF printf
+
+#define DRIVER_SPI_LOG_ENABLE 1
 
 #ifdef __cplusplus
 }

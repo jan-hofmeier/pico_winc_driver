@@ -17,6 +17,17 @@ sint8 nm_spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
     gpio_put(CONF_WINC_SPI_CS_PIN, 0);
     sleep_us(1);
 
+#if DRIVER_SPI_LOG_ENABLE
+    printf("[DRIVER] SPI R/W - Size: %d\n", u16Sz);
+    if (pu8Mosi != NULL) {
+        printf("[DRIVER] MOSI: ");
+        for (int i = 0; i < u16Sz; i++) {
+            printf("%02x ", pu8Mosi[i]);
+        }
+        printf("\n");
+    }
+#endif
+
     if (pu8Mosi == NULL && pu8Miso == NULL)
     {
         gpio_put(CONF_WINC_SPI_CS_PIN, 1);
@@ -34,6 +45,16 @@ sint8 nm_spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
     {
         spi_write_read_blocking(CONF_WINC_SPI_PORT, pu8Mosi, pu8Miso, u16Sz);
     }
+
+#if DRIVER_SPI_LOG_ENABLE
+    if (pu8Miso != NULL) {
+        printf("[DRIVER] MISO: ");
+        for (int i = 0; i < u16Sz; i++) {
+            printf("%02x ", pu8Miso[i]);
+        }
+        printf("\n");
+    }
+#endif
 
     sleep_us(1);
     gpio_put(CONF_WINC_SPI_CS_PIN, 1);
