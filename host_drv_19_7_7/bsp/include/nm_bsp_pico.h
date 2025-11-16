@@ -1,0 +1,14 @@
+#ifndef _NM_BSP_PICO_H_
+#define _NM_BSP_PICO_H_
+
+#include "conf_winc.h"
+#include "math.h"
+
+#define CONF_WINC_USE_SPI
+
+#define NM_EDGE_INTERRUPT 1
+
+#define NM_DEBUG CONF_WINC_DEBUG
+#define NM_BSP_PRINTF CONF_WINC_PRINTF
+
+#endif /* _NM_BSP_PICO_H_ */

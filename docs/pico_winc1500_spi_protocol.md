@@ -458,6 +458,7 @@ This response is sent when data is received on a socket.
 | `Remaining_Size`   | `uint16`  | The amount of data remaining in the socket buffer.|
 | `Remote_Address`   | `struct sockaddr_in` | The address of the sender.                      |
 
+
 ## HIF Transaction Flow
 
 This section describes the sequence of operations required to send a HIF command to the WINC1500 and to process a response received from it.

@@ -7,40 +7,78 @@ project(pico_winc_driver C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
+set(WINC_DRIVER_VERSION "19_3_0" CACHE STRING "WINC driver version to use: 19_7_6 or 19_3_0")
+set_property(CACHE WINC_DRIVER_VERSION PROPERTY STRINGS CURRENT 19_3_0)
+
 # initialize the raspberry pi pico sdk
 pico_sdk_init()
 
 # add executable and link libraries
 add_executable(pico_winc_driver
     main.c
-
-    host_drv/common/source/nm_common.c
-    host_drv/driver/source/m2m_hif.c
-    host_drv/driver/source/m2m_ota.c
-    host_drv/driver/source/m2m_periph.c
-    host_drv/driver/source/m2m_ssl.c
-    host_drv/driver/source/m2m_wifi.c
-    host_drv/driver/source/nmasic.c
-    host_drv/driver/source/nmdrv.c
-    host_drv/driver/source/nmspi.c
-    host_drv/driver/source/nmbus.c
-    host_drv/socket/source/socket.c
-    host_drv/spi_flash/source/spi_flash.c
-
-    host_drv/bsp/source/nm_bsp_pico.c
-    host_drv/bus_wrapper/source/nm_bus_wrapper_pico.c
 )
 
-target_include_directories(pico_winc_driver PUBLIC
-    .
-    host_drv
-    host_drv/common/include
-    host_drv/driver/include
-    host_drv/bsp/include
-    host_drv/bus_wrapper/include
-    host_drv/socket/include
-    host_drv/spi_flash/include
-)
+if(WINC_DRIVER_VERSION STREQUAL "19_7_7")
+    target_sources(pico_winc_driver PRIVATE
+        host_drv_19_7_7/common/source/nm_common.c
+        host_drv_19_7_7/driver/source/m2m_hif.c
+        host_drv_19_7_7/driver/source/m2m_ota.c
+        host_drv_19_7_7/driver/source/m2m_periph.c
+        host_drv_19_7_7/driver/source/m2m_ssl.c
+        host_drv_19_7_7/driver/source/m2m_wifi.c
+        host_drv_19_7_7/driver/source/nmasic.c
+        host_drv_19_7_7/driver/source/nmdrv.c
+        host_drv_19_7_7/driver/source/nmspi.c
+        host_drv_19_7_7/driver/source/nmbus.c
+        host_drv_19_7_7/socket/source/socket.c
+        host_drv_19_7_7/spi_flash/source/spi_flash.c
+        host_drv_19_7_7/bsp/source/nm_bsp_pico.c
+        host_drv_19_7_7/bus_wrapper/source/nm_bus_wrapper_pico.c
+        iot/http/http_client.c
+    )
+    target_include_directories(pico_winc_driver PUBLIC
+        .
+        host_drv_19_7_7
+        host_drv_19_7_7/common/include
+        host_drv_19_7_7/driver/include
+        host_drv_19_7_7/bsp/include
+        host_drv_19_7_7/bus_wrapper/include
+        host_drv_19_7_7/socket/include
+        host_drv_19_7_7/spi_flash/include
+        iot/http
+    )
+elseif(WINC_DRIVER_VERSION STREQUAL "19_3_0")
+    target_sources(pico_winc_driver PRIVATE
+        host_drv_19_3_0/common/source/nm_common.c
+        host_drv_19_3_0/driver/source/m2m_hif.c
+        host_drv_19_3_0/driver/source/m2m_ota.c
+        host_drv_19_3_0/driver/source/m2m_periph.c
+        host_drv_19_3_0/driver/source/m2m_wifi.c
+        host_drv_19_3_0/driver/source/nmasic.c
+        host_drv_19_3_0/driver/source/nmdrv.c
+        host_drv_19_3_0/driver/source/nmspi.c
+        host_drv_19_3_0/driver/source/nmbus.c
+        host_drv_19_3_0/socket/source/socket.c
+        host_drv_19_3_0/socket/source/socket_buffer.c
+        host_drv_19_3_0/spi_flash/source/spi_flash.c
+        host_drv_19_3_0/bsp/source/nm_bsp_pico.c
+        host_drv_19_3_0/bus_wrapper/source/nm_bus_wrapper_pico.c
+        iot/http/http_client.c
+    )
+    target_include_directories(pico_winc_driver PUBLIC
+        .
+        host_drv_19_3_0
+        host_drv_19_3_0/common/include
+        host_drv_19_3_0/driver/include
+        host_drv_19_3_0/bsp/include
+        host_drv_19_3_0/bus_wrapper/include
+        host_drv_19_3_0/socket/include
+        host_drv_19_3_0/spi_flash/include
+        iot/http
+    )
+else()
+    message(FATAL_ERROR "Invalid WINC_DRIVER_VERSION selected: ${WINC_DRIVER_VERSION}")
+endif()
 
 target_link_libraries(pico_winc_driver pico_stdlib hardware_spi hardware_gpio)
 
