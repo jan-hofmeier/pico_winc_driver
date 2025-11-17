@@ -10,12 +10,12 @@
 
 // Enum to define the type of log message for formatting
 typedef enum {
-    SIM_LOG_TYPE_NONE,
-    SIM_LOG_TYPE_COMMAND,
-    SIM_LOG_TYPE_ADDRESS,
-    SIM_LOG_TYPE_DATA,
-    SIM_LOG_TYPE_UNKNOWN_COMMAND,
-    SIM_LOG_TYPE_ADDRESS_DATA // New type for logging address and data
+    SIM_LOG_TYPE_STRING,
+    SIM_LOG_TYPE_CMD,
+    SIM_LOG_TYPE_CMD_ADDR,
+    SIM_LOG_TYPE_CMD_DATA,
+    SIM_LOG_TYPE_CMD_ADDR_DATA,
+    SIM_LOG_TYPE_UNKNOWN_CMD,
 } sim_log_type_t;
 
 typedef struct {
@@ -32,16 +32,14 @@ typedef struct {
     uint32_t count;
 } sim_log_ring_buffer_t;
 
-extern sim_log_ring_buffer_t g_sim_log_buffer;
-
 #if (SIMULATOR_SPI_LOG_ENABLE == 1)
-#define SIM_LOG(type, str, val1, ...) sim_log_enqueue(type, str, val1, ##__VA_ARGS__)
+void sim_log_enqueue(sim_log_type_t type, const char *message_str, ...);
+#define SIM_LOG(type, ...) sim_log_enqueue(type, ##__VA_ARGS__)
 #else
-#define SIM_LOG(type, str, val1, ...) do {} while(0)
+#define SIM_LOG(type, ...) do {} while(0)
 #endif
 
-void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t value1, uint32_t value2);
-bool sim_log_process_one_message(void);
+void winc_simulator_app_log(void);
 
 // Define WINC memory size
 #define WINC_MEM_SIZE (1024 * 16) // 16KB for simulation
