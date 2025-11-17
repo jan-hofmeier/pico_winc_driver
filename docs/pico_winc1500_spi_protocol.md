@@ -12,6 +12,21 @@ This document describes the SPI protocol used to communicate with the WINC1500 W
 
 All SPI transactions consist of a command phase and a data phase. The host initiates a transaction by asserting the CS line, sending a command, and then sending or receiving data.
 
+### CRC-7 Checksum
+
+The SPI protocol includes an optional CRC-7 checksum to ensure data integrity. When enabled, the CRC is calculated on the command and its parameters, and the resulting checksum is appended to the end of the command. The WINC1500 verifies the CRC and will reject commands with an invalid checksum.
+
+The CRC is calculated using the polynomial `x^7 + x^3 + 1` (0x89). The initial value of the CRC is `0x7f`.
+
+The CRC can be enabled or disabled by writing to the `NMI_SPI_PROTOCOL_CONFIG` register (address `0xE824`). Bits 2 and 3 of this register control the CRC:
+
+*   `0b00`: CRC disabled
+*   `0b01`: CRC enabled
+*   `0b10`: Reserved
+*   `0b11`: Reserved
+
+The default value of this register is `0x00000054`, which enables CRC. To disable the CRC, write a value to this register with bits 2 and 3 cleared to `0`.
+
 **Packet Order Prefix (0xFx):** For multi-packet transfers, a 0xFx prefix is used to indicate the packet order:
 *   `0xF1`: First packet in a multi-packet transfer.
 *   `0xF2`: Continued packet in a multi-packet transfer.
