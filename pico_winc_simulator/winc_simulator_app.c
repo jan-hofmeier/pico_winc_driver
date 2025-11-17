@@ -229,6 +229,7 @@ void handle_spi_transaction() {
 
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr);
             break;
         }
         // TODO: Implement other commands (DMA, RESET, etc.)
