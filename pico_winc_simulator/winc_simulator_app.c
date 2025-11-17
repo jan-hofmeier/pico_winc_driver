@@ -15,14 +15,14 @@ uint8_t winc_memory[WINC_MEM_SIZE];
 sim_log_ring_buffer_t g_sim_log_buffer = {0};
 
 // Function to enqueue a log message
-void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t value1, uint32_t value2) {
+void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t addr, uint32_t data) {
     if (g_sim_log_buffer.count < SIM_LOG_BUFFER_SIZE) {
         sim_log_message_t *msg = &g_sim_log_buffer.buffer[g_sim_log_buffer.head];
         msg->type = type;
         strncpy(msg->message_str, message_str, SIM_LOG_MESSAGE_STRING_LEN - 1);
         msg->message_str[SIM_LOG_MESSAGE_STRING_LEN - 1] = '\0'; // Ensure null termination
-        msg->value1 = value1;
-        msg->value2 = value2;
+        msg->addr = addr;
+        msg->data = data;
 
         g_sim_log_buffer.head = (g_sim_log_buffer.head + 1) % SIM_LOG_BUFFER_SIZE;
         g_sim_log_buffer.count++;
@@ -34,31 +34,8 @@ bool sim_log_process_one_message(void) {
     if (g_sim_log_buffer.count > 0) {
         sim_log_message_t *msg = &g_sim_log_buffer.buffer[g_sim_log_buffer.tail];
 
-        switch (msg->type) {
-            case SIM_LOG_TYPE_COMMAND:
-                printf("[SIMULATOR] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
-                break;
-            case SIM_LOG_TYPE_ADDRESS:
-                printf("[SIMULATOR] %s: 0x%06x\n", msg->message_str, msg->value1);
-                break;
-            case SIM_LOG_TYPE_DATA:
-                printf("[SIMULATOR] %s: %02x %02x %02x %02x\n", msg->message_str,
-                       (uint8_t)(msg->value1 >> 24), (uint8_t)(msg->value1 >> 16),
-                       (uint8_t)(msg->value1 >> 8), (uint8_t)msg->value1);
-                break;
-            case SIM_LOG_TYPE_ADDRESS_DATA:
-                printf("[SIMULATOR] %s Address: 0x%06x Data: %02x %02x %02x %02x\n", msg->message_str, msg->value1,
-                       (uint8_t)(msg->value2 >> 24), (uint8_t)(msg->value2 >> 16),
-                       (uint8_t)(msg->value2 >> 8), (uint8_t)msg->value2);
-                break;
-            case SIM_LOG_TYPE_UNKNOWN_COMMAND:
-                printf("[SIMULATOR] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
-                break;
-            case SIM_LOG_TYPE_NONE:
-            default:
-                printf("[SIMULATOR] %s\n", msg->message_str);
-                break;
-        }
+        // Standardized log format: [SIMULATOR] <Message String> Addr: 0x<addr> Data: 0x<data>
+        printf("[SIMULATOR] %-28s Addr: 0x%06x Data: 0x%08x\n", msg->message_str, msg->addr, msg->data);
 
         g_sim_log_buffer.tail = (g_sim_log_buffer.tail + 1) % SIM_LOG_BUFFER_SIZE;
         g_sim_log_buffer.count--;
@@ -77,7 +54,7 @@ void handle_spi_transaction() {
     uint32_t log_addr = 0;
     uint32_t log_data = 0;
     const char* command_str = "Unhandled Command";
-    sim_log_type_t log_type = SIM_LOG_TYPE_NONE;
+    sim_log_type_t log_type = SIM_LOG_TYPE_CMD;
 
     // Wait for the command byte
     do {
@@ -106,7 +83,7 @@ void handle_spi_transaction() {
             }
             log_addr = addr;
             command_str = "SINGLE_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
+            log_type = SIM_LOG_TYPE_READ;
             // log_data will be captured from the actual memory content if needed for detailed logging
             break;
         }
@@ -118,7 +95,7 @@ void handle_spi_transaction() {
             log_addr = addr;
             log_data = data_val;
             command_str = "SINGLE_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
+            log_type = SIM_LOG_TYPE_WRITE;
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 4, 4);
@@ -133,7 +110,7 @@ void handle_spi_transaction() {
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             log_addr = addr;
             command_str = "INTERNAL_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
+            log_type = SIM_LOG_TYPE_READ;
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
@@ -158,7 +135,7 @@ void handle_spi_transaction() {
             log_addr = addr;
             log_data = data_val;
             command_str = "INTERNAL_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
+            log_type = SIM_LOG_TYPE_WRITE;
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 3, 4);
@@ -183,7 +160,7 @@ void handle_spi_transaction() {
 
             log_addr = addr;
             command_str = (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
+            log_type = SIM_LOG_TYPE_READ;
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
@@ -218,7 +195,7 @@ void handle_spi_transaction() {
 
             log_addr = addr;
             command_str = (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS;
+            log_type = SIM_LOG_TYPE_WRITE;
 
             // Read and discard the 0xF3 prefix from the host
             uint8_t prefix_byte;
@@ -243,7 +220,8 @@ void handle_spi_transaction() {
         // TODO: Implement other commands (DMA, RESET, etc.)
         default: {
             command_str = "Unknown Command";
-            log_type = SIM_LOG_TYPE_COMMAND; // Log just the unknown command byte
+            log_type = SIM_LOG_TYPE_CMD;
+            log_data = command;
 
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
@@ -255,15 +233,7 @@ void handle_spi_transaction() {
         }
     }
     // Summary log after the command and response are handled
-    if (log_type == SIM_LOG_TYPE_ADDRESS) {
-        SIM_LOG(log_type, command_str, log_addr, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_DATA) {
-        SIM_LOG(log_type, command_str, log_data, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_ADDRESS_DATA) {
-        SIM_LOG(log_type, command_str, log_addr, log_data); // Pass both address and data
-    } else { // Covers SIM_LOG_TYPE_COMMAND and SIM_LOG_TYPE_NONE
-        SIM_LOG(log_type, command_str, command, 0); // Pass 0 for value2
-    }
+    SIM_LOG(log_type, command_str, log_addr, log_data);
 }
 
 #define LOG_PROCESS_INTERVAL 100 // Process log queue every 100 transactions
