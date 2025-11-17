@@ -2,6 +2,7 @@
 #define WINC_SIMULATOR_APP_H
 
 #include <stdio.h> // Required for printf
+#include "hardware/pio.h"
 #include "config/conf_simulator.h" // Include for SIMULATOR_SPI_LOG_ENABLE
 
 // Asynchronous logging buffer
@@ -69,6 +70,7 @@ extern simulator_state_t simulator_current_state;
 extern uint8_t simulator_response_buffer[4];
 extern uint8_t simulator_response_index;
 
+void pio_spi_slave_init(PIO pio, uint sm, uint offset, uint miso_pin, uint mosi_pin, uint sck_pin, uint cs_pin);
 int winc_simulator_app_main(void);
 
 #endif // WINC_SIMULATOR_APP_H

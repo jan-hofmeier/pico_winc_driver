@@ -1,0 +1,18 @@
+.program winc_spi_slave
+.side_set 1
+
+start:
+    wait 0 pin 0 side 0 ; Wait for CS to be asserted
+
+    set x, 7 side 0
+bit_loop:
+    out pins, 1 side 0
+    wait 1 pin 1 side 1
+    in pins, 1 side 0
+    wait 0 pin 1 side 0
+    jmp x-- bit_loop side 0
+
+    push block side 0
+    pull block side 0
+
+    jmp start side 0
