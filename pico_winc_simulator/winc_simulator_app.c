@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h> // Required for va_list
@@ -10,6 +11,54 @@
 
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
+
+// CRC7 implementation for SPI commands
+static bool g_use_crc = true;
+
+static const uint8_t crc7_syndrome_table[256] = {
+	0x00, 0x09, 0x12, 0x1b, 0x24, 0x2d, 0x36, 0x3f,
+	0x48, 0x41, 0x5a, 0x53, 0x6c, 0x65, 0x7e, 0x77,
+	0x19, 0x10, 0x0b, 0x02, 0x3d, 0x34, 0x2f, 0x26,
+	0x51, 0x58, 0x43, 0x4a, 0x75, 0x7c, 0x67, 0x6e,
+	0x32, 0x3b, 0x20, 0x29, 0x16, 0x1f, 0x04, 0x0d,
+	0x7a, 0x73, 0x68, 0x61, 0x5e, 0x57, 0x4c, 0x45,
+	0x2b, 0x22, 0x39, 0x30, 0x0f, 0x06, 0x1d, 0x14,
+	0x63, 0x6a, 0x71, 0x78, 0x47, 0x4e, 0x55, 0x5c,
+	0x64, 0x6d, 0x76, 0x7f, 0x40, 0x49, 0x52, 0x5b,
+	0x2c, 0x25, 0x3e, 0x37, 0x08, 0x01, 0x1a, 0x13,
+	0x7d, 0x74, 0x6f, 0x66, 0x59, 0x50, 0x4b, 0x42,
+	0x35, 0x3c, 0x27, 0x2e, 0x11, 0x18, 0x03, 0x0a,
+	0x56, 0x5f, 0x44, 0x4d, 0x72, 0x7b, 0x60, 0x69,
+	0x1e, 0x17, 0x0c, 0x05, 0x3a, 0x33, 0x28, 0x21,
+	0x4f, 0x46, 0x5d, 0x54, 0x6b, 0x62, 0x79, 0x70,
+	0x07, 0x0e, 0x15, 0x1c, 0x23, 0x2a, 0x31, 0x38,
+	0x41, 0x48, 0x53, 0x5a, 0x65, 0x6c, 0x77, 0x7e,
+	0x09, 0x00, 0x1b, 0x12, 0x2d, 0x24, 0x3f, 0x36,
+	0x58, 0x51, 0x4a, 0x43, 0x7c, 0x75, 0x6e, 0x67,
+	0x10, 0x19, 0x02, 0x0b, 0x34, 0x3d, 0x26, 0x2f,
+	0x73, 0x7a, 0x61, 0x68, 0x57, 0x5e, 0x45, 0x4c,
+	0x3b, 0x32, 0x29, 0x20, 0x1f, 0x16, 0x0d, 0x04,
+	0x6a, 0x63, 0x78, 0x71, 0x4e, 0x47, 0x5c, 0x55,
+	0x22, 0x2b, 0x30, 0x39, 0x06, 0x0f, 0x14, 0x1d,
+	0x25, 0x2c, 0x37, 0x3e, 0x01, 0x08, 0x13, 0x1a,
+	0x6d, 0x64, 0x7f, 0x76, 0x49, 0x40, 0x5b, 0x52,
+	0x3c, 0x35, 0x2e, 0x27, 0x18, 0x11, 0x0a, 0x03,
+	0x74, 0x7d, 0x66, 0x6f, 0x50, 0x59, 0x42, 0x4b,
+	0x17, 0x1e, 0x05, 0x0c, 0x33, 0x3a, 0x21, 0x28,
+	0x5f, 0x56, 0x4d, 0x44, 0x7b, 0x72, 0x69, 0x60,
+	0x0e, 0x07, 0x1c, 0x15, 0x2a, 0x23, 0x38, 0x31,
+	0x46, 0x4f, 0x54, 0x5d, 0x62, 0x6b, 0x70, 0x79
+};
+
+static inline uint8_t crc7_byte(uint8_t crc, uint8_t data) {
+	return crc7_syndrome_table[(crc << 1) ^ data];
+}
+
+static inline uint8_t crc7(uint8_t crc, const uint8_t *buffer, uint32_t len) {
+	while (len--)
+		crc = crc7_byte(crc, *buffer++);
+	return crc;
+}
 
 #include "pico/multicore.h"
 
@@ -92,10 +141,37 @@ void log_core_entry() {
 }
 #endif
 
+// Helper function to read the rest of a command and verify CRC
+static bool read_command_and_verify_crc(uint8_t* cmd_buf, uint8_t params_len, bool is_read_cmd) {
+    uint16_t read_len = params_len;
+    if (g_use_crc) {
+        read_len++; // Read one more byte for CRC
+    }
+
+    // Read the rest of the command (params + optional CRC)
+    if (is_read_cmd) {
+        uint8_t read_prefix[3] = {cmd_buf[0], 0x00, 0xF3};
+        spi_write_read_blocking(SPI_PORT, read_prefix, cmd_buf + 1, read_len);
+    } else {
+        spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, read_len);
+    }
+
+    if (g_use_crc) {
+        uint8_t received_crc = cmd_buf[params_len + 1];
+        uint8_t calculated_crc = crc7(0x7f, cmd_buf, params_len + 1);
+        calculated_crc = (calculated_crc << 1) | 1;
+
+        if (calculated_crc != received_crc) {
+            SIM_LOG(SIM_LOG_TYPE_STRING, "CRC mismatch! received: 0x%02x, calculated: 0x%02x", received_crc, calculated_crc);
+            return false; // Indicate failure
+        }
+    }
+    return true;
+}
+
 void handle_spi_transaction() {
     uint8_t command;
-    uint8_t cmd_buf[8]; // Buffer to hold command and address commanded by the host
-    uint8_t data_buf[4]; // Buffer for read/write data in the host command
+    uint8_t cmd_buf[10]; // Buffer to hold command and parameters
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
     
     // Wait for the command byte
@@ -103,13 +179,14 @@ void handle_spi_transaction() {
         spi_read_blocking(SPI_PORT, 0, &command, 1); // Read into 'command'
     } while(!command); // ignore zero bytes.
 
+    cmd_buf[0] = command;
     response_buf[0] = command; // Prepend command to response buffer
 
     switch(command) {
         case CMD_SINGLE_READ: {
-            // Read 3-byte address
-            uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_read_blocking(SPI_PORT, single_read_prefix, cmd_buf + 1, 3);
+            if (!read_command_and_verify_crc(cmd_buf, 3, true)) {
+                break; // CRC error
+            }
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
             // Send data
@@ -124,8 +201,9 @@ void handle_spi_transaction() {
             break;
         }
         case CMD_SINGLE_WRITE: {
-            // Read 3-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 7);
+            if (!read_command_and_verify_crc(cmd_buf, 7, false)) {
+                break; // CRC error
+            }
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
 
@@ -138,9 +216,9 @@ void handle_spi_transaction() {
             break;
         }
         case CMD_INTERNAL_READ: {
-            // Read 2-byte address
-            uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_read_blocking(SPI_PORT, internal_read_prefix, cmd_buf + 1, 2);
+            if (!read_command_and_verify_crc(cmd_buf, 3, true)) { // 2 addr + 1 dummy
+                break; // CRC error
+            }
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
 
             // Send data
@@ -155,10 +233,21 @@ void handle_spi_transaction() {
             break;
         }
         case CMD_INTERNAL_WRITE: {
-            // Read 2-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 6);
+            if (!read_command_and_verify_crc(cmd_buf, 6, false)) {
+                break; // CRC error
+            }
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
+
+            if (addr == NMI_SPI_PROTOCOL_CONFIG) {
+                if ((data_val & 0xc) == 0) {
+                    g_use_crc = false;
+                    SIM_LOG(SIM_LOG_TYPE_STRING, "CRC disabled");
+                } else {
+                    g_use_crc = true;
+                    SIM_LOG(SIM_LOG_TYPE_STRING, "CRC enabled");
+                }
+            }
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 3, 4);
@@ -170,19 +259,18 @@ void handle_spi_transaction() {
         }
         case CMD_DMA_READ:
         case CMD_DMA_EXT_READ: {
-            // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
-            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
-            uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? 5 : 6;
-            spi_write_read_blocking(SPI_PORT, dma_read_prefix, cmd_buf + 1, addr_size_bytes);
+            uint8_t params_len = (command == CMD_DMA_READ) ? 5 : 6;
+            if (!read_command_and_verify_crc(cmd_buf, params_len, true)) {
+                break; // CRC error
+            }
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-            uint16_t size;
+            uint32_t size;
             if (command == CMD_DMA_READ) {
                 size = (cmd_buf[4] << 8) | cmd_buf[5];
             } else { // CMD_DMA_EXT_READ
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
-
             // Send data
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
                 spi_write_blocking(SPI_PORT, &winc_memory[addr], size);
@@ -199,12 +287,13 @@ void handle_spi_transaction() {
         }
         case CMD_DMA_WRITE:
         case CMD_DMA_EXT_WRITE: {
-            // Read 3-byte address and 2-byte size (for CMD_DMA_WRITE) or 3-byte size (for CMD_DMA_EXT_WRITE)
-            uint8_t addr_size_bytes = (command == CMD_DMA_WRITE) ? 5 : 6;
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, addr_size_bytes);
+            uint8_t params_len = (command == CMD_DMA_WRITE) ? 5 : 6;
+            if (!read_command_and_verify_crc(cmd_buf, params_len, false)) {
+                break; // CRC error
+            }
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-            uint16_t size;
+            uint32_t size;
             if (command == CMD_DMA_WRITE) {
                 size = (cmd_buf[4] << 8) | cmd_buf[5];
             } else { // CMD_DMA_EXT_WRITE
@@ -229,9 +318,16 @@ void handle_spi_transaction() {
 
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr);
             break;
         }
-        // TODO: Implement other commands (DMA, RESET, etc.)
+        case CMD_RESET: {
+            if (!read_command_and_verify_crc(cmd_buf, 3, false)) {
+                break; // CRC error
+            }
+            break;
+        }
+        // TODO: Implement other commands (TERMINATE, REPEAT)
         default: {
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
@@ -268,6 +364,11 @@ int winc_simulator_app_main() {
     // Pre-populate some read-only registers with default values
     uint32_t chip_id = 0x1002a0;
     memcpy(&winc_memory[CHIPID], &chip_id, sizeof(chip_id));
+
+    // Set default SPI protocol config with CRC enabled
+    uint32_t spi_protocol_config = 0x00000054;
+    memcpy(&winc_memory[NMI_SPI_PROTOCOL_CONFIG], &spi_protocol_config, sizeof(spi_protocol_config));
+    g_use_crc = true;
 
     // SPI initialization
     spi_init(SPI_PORT, 1000 * 1000); // 1 MHz clock
