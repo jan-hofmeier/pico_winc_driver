@@ -10,19 +10,17 @@
 
 // Enum to define the type of log message for formatting
 typedef enum {
-    SIM_LOG_TYPE_NONE,
-    SIM_LOG_TYPE_COMMAND,
-    SIM_LOG_TYPE_ADDRESS,
-    SIM_LOG_TYPE_DATA,
-    SIM_LOG_TYPE_UNKNOWN_COMMAND,
-    SIM_LOG_TYPE_ADDRESS_DATA // New type for logging address and data
+    SIM_LOG_TYPE_INFO,
+    SIM_LOG_TYPE_CMD,
+    SIM_LOG_TYPE_READ,
+    SIM_LOG_TYPE_WRITE,
 } sim_log_type_t;
 
 typedef struct {
     sim_log_type_t type;
     char message_str[SIM_LOG_MESSAGE_STRING_LEN];
-    uint32_t value1; // Renamed from 'value'
-    uint32_t value2; // New field for second value
+    uint32_t addr;
+    uint32_t data;
 } sim_log_message_t;
 
 typedef struct {
@@ -35,12 +33,12 @@ typedef struct {
 extern sim_log_ring_buffer_t g_sim_log_buffer;
 
 #if (SIMULATOR_SPI_LOG_ENABLE == 1)
-#define SIM_LOG(type, str, val1, ...) sim_log_enqueue(type, str, val1, ##__VA_ARGS__)
+#define SIM_LOG(type, str, addr, data) sim_log_enqueue(type, str, addr, data)
 #else
-#define SIM_LOG(type, str, val1, ...) do {} while(0)
+#define SIM_LOG(type, str, addr, data) do {} while(0)
 #endif
 
-void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t value1, uint32_t value2);
+void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t addr, uint32_t data);
 bool sim_log_process_one_message(void);
 
 // Define WINC memory size
