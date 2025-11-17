@@ -1,0 +1,15 @@
+.program spi_rx
+.wrap_target
+    wait 0 pin 1    ; Wait for CS to be asserted
+    wait 0 pin 0    ; Wait for falling clock edge
+    wait 1 pin 0    ; Wait for rising clock edge
+    in pins, 1      ; Read MOSI
+    push block      ; Push the received byte
+.wrap
+
+.program spi_tx
+.wrap_target
+    wait 0 pin 1    ; Wait for CS to be asserted
+    pull block      ; Pull a byte from the TX FIFO
+    out pins, 1     ; Write MISO
+.wrap
