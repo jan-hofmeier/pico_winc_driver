@@ -36,7 +36,7 @@ bool sim_log_process_one_message(void) {
 
         switch (msg->type) {
             case SIM_LOG_TYPE_COMMAND:
-                printf("[SIMULATOR] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
+                printf("[SIMULATOR] %s: 0x%X -> 0x%X\n", msg->message_str, msg->value1, msg->value2);
                 break;
             case SIM_LOG_TYPE_ADDRESS:
                 printf("[SIMULATOR] %s: 0x%06x\n", msg->message_str, msg->value1);
@@ -72,12 +72,6 @@ void handle_spi_transaction() {
     uint8_t cmd_buf[8]; // Buffer to hold command and address commanded by the host
     uint8_t data_buf[4]; // Buffer for read/write data in the host command
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
-    
-    // Variables for summary log
-    uint32_t log_addr = 0;
-    uint32_t log_data = 0;
-    const char* command_str = "Unhandled Command";
-    sim_log_type_t log_type = SIM_LOG_TYPE_NONE;
 
     // Wait for the command byte
     do {
@@ -104,10 +98,7 @@ void handle_spi_transaction() {
                 uint8_t zero_buf[4] = {0};
                 spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            log_addr = addr;
-            command_str = "SINGLE_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-            // log_data will be captured from the actual memory content if needed for detailed logging
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ", addr, *(uint32_t*)(winc_memory+addr));
             break;
         }
         case CMD_SINGLE_WRITE: {
@@ -115,25 +106,19 @@ void handle_spi_transaction() {
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 7);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "SINGLE_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 4, 4);
             }
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, *(uint32_t*)(cmd_buf + 4));
             break;
         }
         case CMD_INTERNAL_READ: {
             // Read 2-byte address
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 2);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
-            log_addr = addr;
-            command_str = "INTERNAL_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
@@ -147,7 +132,7 @@ void handle_spi_transaction() {
                 uint8_t zero_buf[4] = {0};
                 spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            // log_data will be captured from the actual memory content if needed for detailed logging
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_READ", addr, *(uint32_t*)(winc_memory+addr));
             break;
         }
         case CMD_INTERNAL_WRITE: {
@@ -155,16 +140,13 @@ void handle_spi_transaction() {
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 6);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "INTERNAL_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 3, 4);
             }
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_WRITE", addr, *(uint32_t*)(cmd_buf + 3));
             break;
         }
         case CMD_DMA_READ:
@@ -181,10 +163,6 @@ void handle_spi_transaction() {
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
 
-            log_addr = addr;
-            command_str = (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
             spi_write_blocking(SPI_PORT, dma_read_prefix, 3);
@@ -200,6 +178,7 @@ void handle_spi_transaction() {
                     spi_write_blocking(SPI_PORT, zero_buf, (size - i > sizeof(zero_buf)) ? sizeof(zero_buf) : (size - i));
                 }
             }
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ", addr, size);
             break;
         }
         case CMD_DMA_WRITE:
@@ -215,10 +194,6 @@ void handle_spi_transaction() {
             } else { // CMD_DMA_EXT_WRITE
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
-
-            log_addr = addr;
-            command_str = (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS;
 
             // Read and discard the 0xF3 prefix from the host
             uint8_t prefix_byte;
@@ -238,31 +213,20 @@ void handle_spi_transaction() {
 
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, size);
             break;
         }
         // TODO: Implement other commands (DMA, RESET, etc.)
         default: {
-            command_str = "Unknown Command";
-            log_type = SIM_LOG_TYPE_COMMAND; // Log just the unknown command byte
-
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
-            uint8_t dummy[8];
-            spi_read_blocking(SPI_PORT, 0, dummy, 8);
+            uint32_t dummy;
+            spi_read_blocking(SPI_PORT, 0, (uint8_t*)&dummy, 8);
             response_buf[1] = 0xFF; // Error status
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unknown Command", command, dummy);
             break;
         }
-    }
-    // Summary log after the command and response are handled
-    if (log_type == SIM_LOG_TYPE_ADDRESS) {
-        SIM_LOG(log_type, command_str, log_addr, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_DATA) {
-        SIM_LOG(log_type, command_str, log_data, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_ADDRESS_DATA) {
-        SIM_LOG(log_type, command_str, log_addr, log_data); // Pass both address and data
-    } else { // Covers SIM_LOG_TYPE_COMMAND and SIM_LOG_TYPE_NONE
-        SIM_LOG(log_type, command_str, command, 0); // Pass 0 for value2
     }
 }
 
