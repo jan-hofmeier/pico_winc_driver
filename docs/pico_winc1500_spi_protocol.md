@@ -12,6 +12,11 @@ This document describes the SPI protocol used to communicate with the WINC1500 W
 
 All SPI transactions consist of a command phase and a data phase. The host initiates a transaction by asserting the CS line, sending a command, and then sending or receiving data.
 
+**Packet Order Prefix (0xFx):** For multi-packet transfers, a 0xFx prefix is used to indicate the packet order:
+*   `0xF1`: First packet in a multi-packet transfer.
+*   `0xF2`: Continued packet in a multi-packet transfer.
+*   `0xF3`: Last packet in a multi-packet transfer, or a single-packet transfer.
+
 ### Command Phase
 
 The command phase is a variable-length sequence of bytes that specifies the operation to be performed. The first byte is always the command byte, which has the following format:
@@ -64,10 +69,11 @@ This command is used to read a single word from a register.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_SINGLE_READ`  |
-| 1     | Data[7:0]          |
-| 2     | Data[15:8]         |
-| 3     | Data[23:16]        |
-| 4     | Data[31:24]        |
+| 1     | `0xF3` (Prefix)    |
+| 2     | Data[7:0]          |
+| 3     | Data[15:8]         |
+| 4     | Data[23:16]        |
+| 5     | Data[31:24]        |
 
 ### `CMD_INTERNAL_WRITE`
 
@@ -150,10 +156,11 @@ This command is used to read from an internal register.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_INTERNAL_READ`|
-| 1     | Data[7:0]          |
-| 2     | Data[15:8]         |
-| 3     | Data[23:16]        |
-| 4     | Data[31:24]        |
+| 1     | `0xF3` (Prefix)    |
+| 2     | Data[7:0]          |
+| 3     | Data[15:8]         |
+| 4     | Data[23:16]        |
+| 5     | Data[31:24]        |
 
 ### `CMD_DMA_EXT_READ`
 
@@ -176,7 +183,8 @@ This command is used to read a block of data from memory using extended DMA.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_DMA_EXT_READ` |
-| 1..n  | Data               |
+| 1     | `0xFx` (Prefix)    |
+| 2..n  | Data               |
 
 ### `CMD_DMA_EXT_WRITE`
 
@@ -196,7 +204,10 @@ This command is used to write a block of data to memory using extended DMA.
 
 **Data:**
 
-A block of data of the specified size.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `0xFx` (Prefix)    |
+| 1..n  | A block of data of the specified size. |
 
 **Response:**
 
@@ -257,69 +268,15 @@ This command is used to write a block of data to memory using DMA.
 | 0     | `CMD_DMA_WRITE`    |
 | 1     | Status             |
 
-### `CMD_DMA_EXT_READ`
-
-This command is used to read a block of data from memory using extended DMA.
-
-**Command:**
-
-| Byte  | Description        |
-|-------|--------------------|
-| 0     | `CMD_DMA_EXT_READ` |
-| 1     | Address[23:16]     |
-| 2     | Address[15:8]      |
-| 3     | Address[7:0]       |
-| 4     | Size[23:16]        |
-| 5     | Size[15:8]         |
-| 6     | Size[7:0]          |
-
-**Response:**
-
-| Byte  | Description        |
-|-------|--------------------|
-| 0     | `CMD_DMA_EXT_READ` |
-| 1     | `0xF3` (Prefix)    |
-| 2..n  | Data               |
-
-### `CMD_DMA_EXT_WRITE`
-
-This command is used to write a block of data to memory using extended DMA.
-
-**Command:**
-
-| Byte  | Description        |
-|-------|--------------------|
-| 0     | `CMD_DMA_EXT_WRITE`|
-| 1     | Address[23:16]     |
-| 2     | Address[15:8]      |
-| 3     | Address[7:0]       |
-| 4     | Size[23:16]        |
-| 5     | Size[15:8]         |
-| 6     | Size[7:0]          |
-
-**Data:**
-
-| Byte  | Description        |
-|-------|--------------------|
-| 0     | `0xF3` (Prefix)    |
-| 1..n  | A block of data of the specified size. |
-
-**Response:**
-
-| Byte  | Description        |
-|-------|--------------------|
-| 0     | `CMD_DMA_EXT_WRITE`|
-| 1     | Status             |
-
 ## Command Response
 
 After sending a command, the host must read the SPI bus to receive a response from the WINC1500. The first byte of the response is always an echo of the command that was sent.
 
-For DMA read commands (`CMD_DMA_READ`, `CMD_DMA_EXT_READ`), the second byte of the response is a `0xF3` prefix, followed by the requested data.
+For DMA read commands (`CMD_DMA_READ`, `CMD_DMA_EXT_READ`), the second byte of the response is a `0xFx` prefix, followed by the requested data.
 
-For write commands (`CMD_SINGLE_WRITE`, `CMD_INTERNAL_WRITE`, `CMD_DMA_WRITE`, `CMD_DMA_EXT_WRITE`), the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error. Note that for DMA write commands, the host is expected to send a `0xF3` prefix before the actual data.
+For write commands (`CMD_SINGLE_WRITE`, `CMD_INTERNAL_WRITE`, `CMD_DMA_WRITE`, `CMD_DMA_EXT_WRITE`), the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error. Note that for DMA write commands, the host is expected to send a `0xFx` prefix before the actual data.
 
-For other read commands (`CMD_SINGLE_READ`, `CMD_INTERNAL_READ`), the second byte of the response is the first byte of the requested data.
+For other read commands (`CMD_SINGLE_READ`, `CMD_INTERNAL_READ`), the second byte of the response is a `0xF3` prefix, followed by the first byte of the requested data.
 
 ## Interrupt Handling
 
