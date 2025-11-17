@@ -86,23 +86,28 @@ void handle_spi_transaction() {
 
     response_buf[0] = command; // Prepend command to response buffer
 
-    switch (command) {
+    switch(command) {
         case CMD_SINGLE_READ: {
             // Read 3-byte address
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
+            // Send command echo + 0xF3 prefix
+            uint8_t single_read_prefix[2] = {command, 0xF3};
+            spi_write_blocking(SPI_PORT, single_read_prefix, 2);
+
+            // Send data
             if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(response_buf + 1, &winc_memory[addr], 4); // Copy data after command
+                spi_write_blocking(SPI_PORT, &winc_memory[addr], 4);
             } else {
                 // Address out of bounds, return zeros
-                memset(response_buf + 1, 0, 4);
+                uint8_t zero_buf[4] = {0};
+                spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            spi_write_blocking(SPI_PORT, response_buf, 5); // Write command + 4 bytes data
             log_addr = addr;
             command_str = "SINGLE_READ";
             log_type = SIM_LOG_TYPE_ADDRESS;
-            log_data = (response_buf[1] << 24) | (response_buf[2] << 16) | (response_buf[3] << 8) | response_buf[4];
+            // log_data will be captured from the actual memory content if needed for detailed logging
             break;
         }
         case CMD_SINGLE_WRITE: {
@@ -130,14 +135,19 @@ void handle_spi_transaction() {
             command_str = "INTERNAL_READ";
             log_type = SIM_LOG_TYPE_ADDRESS;
 
+            // Send command echo + 0xF3 prefix
+            uint8_t internal_read_prefix[2] = {command, 0xF3};
+            spi_write_blocking(SPI_PORT, internal_read_prefix, 2);
+
+            // Send data
             if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(response_buf + 1, &winc_memory[addr], 4); // Copy data after command
+                spi_write_blocking(SPI_PORT, &winc_memory[addr], 4);
             }
             else {
-                memset(response_buf + 1, 0, 4);
+                uint8_t zero_buf[4] = {0};
+                spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            spi_write_blocking(SPI_PORT, response_buf, 5); // Write command + 4 bytes data
-            log_data = (response_buf[1] << 24) | (response_buf[2] << 16) | (response_buf[3] << 8) | response_buf[4];
+            // log_data will be captured from the actual memory content if needed for detailed logging
             break;
         }
         case CMD_INTERNAL_WRITE: {
@@ -226,76 +236,6 @@ void handle_spi_transaction() {
                 }
             }
 
-            response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
-            break;
-        }
-        case CMD_SINGLE_READ: {
-            // Read 3-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
-            uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-
-            if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(response_buf + 1, &winc_memory[addr], 4); // Copy data after command
-            } else {
-                // Address out of bounds, return zeros
-                memset(response_buf + 1, 0, 4);
-            }
-            spi_write_blocking(SPI_PORT, response_buf, 5); // Write command + 4 bytes data
-            log_addr = addr;
-            command_str = "SINGLE_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-            log_data = (response_buf[1] << 24) | (response_buf[2] << 16) | (response_buf[3] << 8) | response_buf[4];
-            break;
-        }
-        case CMD_SINGLE_WRITE: {
-            // Read 3-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 7);
-            uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-            uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "SINGLE_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
-
-            if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(&winc_memory[addr], cmd_buf + 4, 4);
-            }
-            response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
-            break;
-        }
-        case CMD_INTERNAL_READ: {
-            // Read 2-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 2);
-            uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
-            log_addr = addr;
-            command_str = "INTERNAL_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-
-            if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(response_buf + 1, &winc_memory[addr], 4); // Copy data after command
-            }
-            else {
-                memset(response_buf + 1, 0, 4);
-            }
-            spi_write_blocking(SPI_PORT, response_buf, 5); // Write command + 4 bytes data
-            log_data = (response_buf[1] << 24) | (response_buf[2] << 16) | (response_buf[3] << 8) | response_buf[4];
-            break;
-        }
-        case CMD_INTERNAL_WRITE: {
-            // Read 2-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 6);
-            uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
-            uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "INTERNAL_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
-
-            if (addr < WINC_MEM_SIZE - 4) {
-                memcpy(&winc_memory[addr], cmd_buf + 3, 4);
-            }
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
             break;
