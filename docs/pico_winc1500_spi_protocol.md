@@ -51,7 +51,7 @@ The following table lists the available SPI commands:
 
 ## Command Formats
 
-### `CMD_SINGLE_READ`
+### `CMD_SINGLE_READ (0xca)`
 
 This command is used to read a single word from a register.
 
@@ -59,7 +59,7 @@ This command is used to read a single word from a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_READ`  |
+| 0     | `CMD_SINGLE_READ (0xca)`  |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -75,7 +75,7 @@ This command is used to read a single word from a register.
 | 4     | Data[23:16]        |
 | 5     | Data[31:24]        |
 
-### `CMD_INTERNAL_WRITE`
+### `CMD_INTERNAL_WRITE (0xc3)`
 
 This command is used to write to an internal register.
 
@@ -83,7 +83,7 @@ This command is used to write to an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_WRITE`|
+| 0     | `CMD_INTERNAL_WRITE (0xc3)`|
 | 1     | Address[15:8]      |
 | 2     | Address[7:0]       |
 | 3     | Data[7:0]          |
@@ -98,7 +98,7 @@ This command is used to write to an internal register.
 | 0     | `CMD_INTERNAL_WRITE`|
 | 1     | Status             |
 
-### `CMD_RESET`
+### `CMD_RESET (0xcf)`
 
 This command is used to reset the WINC1500.
 
@@ -106,7 +106,7 @@ This command is used to reset the WINC1500.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_RESET`        |
+| 0     | `CMD_RESET (0xcf)`        |
 
 **Response:**
 
@@ -115,7 +115,7 @@ This command is used to reset the WINC1500.
 | 0     | `CMD_RESET`        |
 | 1     | Status             |
 
-### `CMD_SINGLE_WRITE`
+### `CMD_SINGLE_WRITE (0xc9)`
 
 This command is used to write a single word to a register.
 
@@ -123,7 +123,7 @@ This command is used to write a single word to a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_WRITE` |
+| 0     | `CMD_SINGLE_WRITE (0xc9)` |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -139,7 +139,7 @@ This command is used to write a single word to a register.
 | 0     | `CMD_SINGLE_WRITE` |
 | 1     | Status             |
 
-### `CMD_INTERNAL_READ`
+### `CMD_INTERNAL_READ (0xc4)`
 
 This command is used to read from an internal register.
 
@@ -147,7 +147,7 @@ This command is used to read from an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_READ`|
+| 0     | `CMD_INTERNAL_READ (0xc4)`|
 | 1     | Address[15:8]      |
 | 2     | Address[7:0]       |
 
@@ -162,7 +162,7 @@ This command is used to read from an internal register.
 | 4     | Data[23:16]        |
 | 5     | Data[31:24]        |
 
-### `CMD_DMA_EXT_READ`
+### `CMD_DMA_EXT_READ (0xc8)`
 
 This command is used to read a block of data from memory using extended DMA.
 
@@ -170,7 +170,7 @@ This command is used to read a block of data from memory using extended DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_EXT_READ` |
+| 0     | `CMD_DMA_EXT_READ (0xc8)` |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -186,7 +186,7 @@ This command is used to read a block of data from memory using extended DMA.
 | 1     | `0xFx` (Prefix)    |
 | 2..n  | Data               |
 
-### `CMD_DMA_EXT_WRITE`
+### `CMD_DMA_EXT_WRITE (0xc7)`
 
 This command is used to write a block of data to memory using extended DMA.
 
@@ -194,7 +194,7 @@ This command is used to write a block of data to memory using extended DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_EXT_WRITE`|
+| 0     | `CMD_DMA_EXT_WRITE (0xc7)`|
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -216,7 +216,7 @@ This command is used to write a block of data to memory using extended DMA.
 | 0     | `CMD_DMA_EXT_WRITE`|
 | 1     | Status             |
 
-### `CMD_DMA_READ`
+### `CMD_DMA_READ (0xc2)`
 
 This command is used to read a block of data from memory using DMA.
 
@@ -224,7 +224,7 @@ This command is used to read a block of data from memory using DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_READ`     |
+| 0     | `CMD_DMA_READ (0xc2)`     |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -239,7 +239,7 @@ This command is used to read a block of data from memory using DMA.
 | 1     | `0xF3` (Prefix)    |
 | 2..n  | Data               |
 
-### `CMD_DMA_WRITE`
+### `CMD_DMA_WRITE (0xc1)`
 
 This command is used to write a block of data to memory using DMA.
 
@@ -247,7 +247,7 @@ This command is used to write a block of data to memory using DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_WRITE`    |
+| 0     | `CMD_DMA_WRITE (0xc1)`    |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
