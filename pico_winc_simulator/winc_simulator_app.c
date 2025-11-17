@@ -11,52 +11,65 @@
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
 
+#include "pico/multicore.h"
+
 // Global log buffer instance
-sim_log_ring_buffer_t g_sim_log_buffer = {0};
+static sim_log_ring_buffer_t g_sim_log_buffer = {0};
 
 // Function to enqueue a log message
-void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t value1, uint32_t value2) {
+void sim_log_enqueue(sim_log_type_t type, const char *message_str, ...) {
     if (g_sim_log_buffer.count < SIM_LOG_BUFFER_SIZE) {
         sim_log_message_t *msg = &g_sim_log_buffer.buffer[g_sim_log_buffer.head];
         msg->type = type;
+
+        va_list args;
+        va_start(args, message_str);
+
         strncpy(msg->message_str, message_str, SIM_LOG_MESSAGE_STRING_LEN - 1);
         msg->message_str[SIM_LOG_MESSAGE_STRING_LEN - 1] = '\0'; // Ensure null termination
-        msg->value1 = value1;
-        msg->value2 = value2;
+
+        if (type != SIM_LOG_TYPE_STRING)
+        {
+            msg->value1 = va_arg(args, uint32_t);
+            if (type == SIM_LOG_TYPE_CMD_ADDR_DATA) {
+                msg->value2 = va_arg(args, uint32_t);
+            }
+        }
+
+        va_end(args);
 
         g_sim_log_buffer.head = (g_sim_log_buffer.head + 1) % SIM_LOG_BUFFER_SIZE;
         g_sim_log_buffer.count++;
     }
 }
 
-// Function to process (print) one log message from the queue
-bool sim_log_process_one_message(void) {
+static bool sim_log_process_one_message(void) {
     if (g_sim_log_buffer.count > 0) {
         sim_log_message_t *msg = &g_sim_log_buffer.buffer[g_sim_log_buffer.tail];
 
         switch (msg->type) {
-            case SIM_LOG_TYPE_COMMAND:
-                printf("[SIMULATOR] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
+            case SIM_LOG_TYPE_CMD:
+                 printf("[SIM] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
                 break;
-            case SIM_LOG_TYPE_ADDRESS:
-                printf("[SIMULATOR] %s: 0x%06x\n", msg->message_str, msg->value1);
+            case SIM_LOG_TYPE_CMD_ADDR:
+                printf("[SIM] %s: (0x%06x)\n", msg->message_str, msg->value1);
                 break;
-            case SIM_LOG_TYPE_DATA:
-                printf("[SIMULATOR] %s: %02x %02x %02x %02x\n", msg->message_str,
+            case SIM_LOG_TYPE_CMD_DATA:
+                printf("[SIM] %s: (0x%02x 0x%02x 0x%02x 0x%02x)\n", msg->message_str,
                        (uint8_t)(msg->value1 >> 24), (uint8_t)(msg->value1 >> 16),
                        (uint8_t)(msg->value1 >> 8), (uint8_t)msg->value1);
                 break;
-            case SIM_LOG_TYPE_ADDRESS_DATA:
-                printf("[SIMULATOR] %s Address: 0x%06x Data: %02x %02x %02x %02x\n", msg->message_str, msg->value1,
+            case SIM_LOG_TYPE_CMD_ADDR_DATA:
+                printf("[SIM] %s: (0x%06x) -> (0x%02x 0x%02x 0x%02x 0x%02x)\n", msg->message_str, msg->value1,
                        (uint8_t)(msg->value2 >> 24), (uint8_t)(msg->value2 >> 16),
                        (uint8_t)(msg->value2 >> 8), (uint8_t)msg->value2);
                 break;
-            case SIM_LOG_TYPE_UNKNOWN_COMMAND:
-                printf("[SIMULATOR] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
+            case SIM_LOG_TYPE_UNKNOWN_CMD:
+                printf("[SIM] %s: 0x%02x\n", msg->message_str, (uint8_t)msg->value1);
                 break;
-            case SIM_LOG_TYPE_NONE:
+            case SIM_LOG_TYPE_STRING:
             default:
-                printf("[SIMULATOR] %s\n", msg->message_str);
+                printf("[SIM] %s\n", msg->message_str);
                 break;
         }
 
@@ -67,18 +80,24 @@ bool sim_log_process_one_message(void) {
     return false;
 }
 
+#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+void log_core_entry() {
+    while (1) {
+        if (multicore_fifo_rvalid())
+        {
+            multicore_fifo_pop_blocking();
+            while(sim_log_process_one_message());
+        }
+    }
+}
+#endif
+
 void handle_spi_transaction() {
     uint8_t command;
     uint8_t cmd_buf[8]; // Buffer to hold command and address commanded by the host
     uint8_t data_buf[4]; // Buffer for read/write data in the host command
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
     
-    // Variables for summary log
-    uint32_t log_addr = 0;
-    uint32_t log_data = 0;
-    const char* command_str = "Unhandled Command";
-    sim_log_type_t log_type = SIM_LOG_TYPE_NONE;
-
     // Wait for the command byte
     do {
         spi_read_blocking(SPI_PORT, 0, &command, 1); // Read into 'command'
@@ -89,12 +108,9 @@ void handle_spi_transaction() {
     switch(command) {
         case CMD_SINGLE_READ: {
             // Read 3-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
-            uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-
-            // Send command echo, status byte, and 0xF3 prefix
             uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, single_read_prefix, 3);
+            spi_write_read_blocking(SPI_PORT, single_read_prefix, cmd_buf + 1, 3);
+            uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -104,10 +120,7 @@ void handle_spi_transaction() {
                 uint8_t zero_buf[4] = {0};
                 spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            log_addr = addr;
-            command_str = "SINGLE_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-            // log_data will be captured from the actual memory content if needed for detailed logging
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR, "SINGLE_READ", addr);
             break;
         }
         case CMD_SINGLE_WRITE: {
@@ -115,29 +128,20 @@ void handle_spi_transaction() {
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 7);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "SINGLE_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 4, 4);
             }
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR_DATA, "SINGLE_WRITE", addr, data_val);
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
             break;
         }
         case CMD_INTERNAL_READ: {
             // Read 2-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 2);
-            uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
-            log_addr = addr;
-            command_str = "INTERNAL_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-
-            // Send command echo, status byte, and 0xF3 prefix
             uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, internal_read_prefix, 3);
+            spi_write_read_blocking(SPI_PORT, internal_read_prefix, cmd_buf + 1, 2);
+            uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -147,7 +151,7 @@ void handle_spi_transaction() {
                 uint8_t zero_buf[4] = {0};
                 spi_write_blocking(SPI_PORT, zero_buf, 4);
             }
-            // log_data will be captured from the actual memory content if needed for detailed logging
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR, "INTERNAL_READ", addr);
             break;
         }
         case CMD_INTERNAL_WRITE: {
@@ -155,14 +159,11 @@ void handle_spi_transaction() {
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 6);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
-            log_addr = addr;
-            log_data = data_val;
-            command_str = "INTERNAL_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS_DATA; // Use new type for address and data
 
             if (addr < WINC_MEM_SIZE - 4) {
                 memcpy(&winc_memory[addr], cmd_buf + 3, 4);
             }
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR_DATA, "INTERNAL_WRITE", addr, data_val);
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
             break;
@@ -170,8 +171,9 @@ void handle_spi_transaction() {
         case CMD_DMA_READ:
         case CMD_DMA_EXT_READ: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
+            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
             uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? 5 : 6;
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, addr_size_bytes);
+            spi_write_read_blocking(SPI_PORT, dma_read_prefix, cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -180,14 +182,6 @@ void handle_spi_transaction() {
             } else { // CMD_DMA_EXT_READ
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
-
-            log_addr = addr;
-            command_str = (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ";
-            log_type = SIM_LOG_TYPE_ADDRESS;
-
-            // Send command echo, status byte, and 0xF3 prefix
-            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, dma_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
@@ -200,6 +194,7 @@ void handle_spi_transaction() {
                     spi_write_blocking(SPI_PORT, zero_buf, (size - i > sizeof(zero_buf)) ? sizeof(zero_buf) : (size - i));
                 }
             }
+            SIM_LOG(SIM_LOG_TYPE_CMD_ADDR, (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ", addr);
             break;
         }
         case CMD_DMA_WRITE:
@@ -215,10 +210,6 @@ void handle_spi_transaction() {
             } else { // CMD_DMA_EXT_WRITE
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
-
-            log_addr = addr;
-            command_str = (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE";
-            log_type = SIM_LOG_TYPE_ADDRESS;
 
             // Read and discard the 0xF3 prefix from the host
             uint8_t prefix_byte;
@@ -242,31 +233,30 @@ void handle_spi_transaction() {
         }
         // TODO: Implement other commands (DMA, RESET, etc.)
         default: {
-            command_str = "Unknown Command";
-            log_type = SIM_LOG_TYPE_COMMAND; // Log just the unknown command byte
-
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
             uint8_t dummy[8];
             spi_read_blocking(SPI_PORT, 0, dummy, 8);
             response_buf[1] = 0xFF; // Error status
             spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            SIM_LOG(SIM_LOG_TYPE_UNKNOWN_CMD, "Unknown Command", command);
             break;
         }
     }
-    // Summary log after the command and response are handled
-    if (log_type == SIM_LOG_TYPE_ADDRESS) {
-        SIM_LOG(log_type, command_str, log_addr, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_DATA) {
-        SIM_LOG(log_type, command_str, log_data, 0); // Pass 0 for value2
-    } else if (log_type == SIM_LOG_TYPE_ADDRESS_DATA) {
-        SIM_LOG(log_type, command_str, log_addr, log_data); // Pass both address and data
-    } else { // Covers SIM_LOG_TYPE_COMMAND and SIM_LOG_TYPE_NONE
-        SIM_LOG(log_type, command_str, command, 0); // Pass 0 for value2
-    }
+    winc_simulator_app_log();
 }
 
-#define LOG_PROCESS_INTERVAL 100 // Process log queue every 100 transactions
+void winc_simulator_app_log(void)
+{
+#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+    if (multicore_fifo_wready())
+    {
+        multicore_fifo_push_blocking(0);
+    }
+#else
+    while(sim_log_process_one_message());
+#endif
+}
 
 int winc_simulator_app_main() {
     set_sys_clock_khz(125000, true); // Set system clock to 125 MHz
@@ -291,14 +281,16 @@ int winc_simulator_app_main() {
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
-    uint32_t transaction_count = 0;
+#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+    SIM_LOG(SIM_LOG_TYPE_STRING, "Launching log core");
+    winc_simulator_app_log();
+    multicore_launch_core1(log_core_entry);
+#endif
+
     while (true) {
         // The core logic is handled in the handler function which blocks
         // until a transaction is complete.
         handle_spi_transaction();
-
-        // The log processing is now handled cooperatively within the SPI bus wrapper.
-        // No need for periodic processing here anymore.
     }
 
     return 0;
