@@ -12,5 +12,6 @@
 #define IRQ_PIN     22
 
 #define SIMULATOR_SPI_LOG_ENABLE 1
+#define SIMULATOR_LOG_CORE_ENABLE 1
 
 #endif /* _CONF_PICO_WINC_SIMULATOR_H_ */

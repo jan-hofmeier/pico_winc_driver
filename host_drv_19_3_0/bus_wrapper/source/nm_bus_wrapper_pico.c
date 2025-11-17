@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #ifdef COMBINED_BUILD
-#include "../../../pico_winc_simulator/winc_simulator_app.h" // Include for sim_log_process_one_message
+#include "pico_winc_simulator/winc_simulator_app.h"
 #endif
 
 #define NM_BUS_MAX_TRX_SZ 256
@@ -52,7 +52,7 @@ sint8 nm_spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
 
 #ifdef COMBINED_BUILD
     // Process logs after blocking SPI operation
-    for (int i = 0; i < 5 && sim_log_process_one_message(); ++i);
+    winc_simulator_app_log();
 #endif
 
 #if DRIVER_SPI_LOG_ENABLE

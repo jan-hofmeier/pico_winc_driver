@@ -80,7 +80,7 @@ static bool sim_log_process_one_message(void) {
     return false;
 }
 
-#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+#if (SIMULATOR_LOG_CORE_ENABLE == 1) && !defined(COMBINED_BUILD)
 void log_core_entry() {
     while (1) {
         if (multicore_fifo_rvalid())
@@ -108,9 +108,12 @@ void handle_spi_transaction() {
     switch(command) {
         case CMD_SINGLE_READ: {
             // Read 3-byte address
-            uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_read_blocking(SPI_PORT, single_read_prefix, cmd_buf + 1, 3);
+            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
+
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, single_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -139,9 +142,12 @@ void handle_spi_transaction() {
         }
         case CMD_INTERNAL_READ: {
             // Read 2-byte address
-            uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_read_blocking(SPI_PORT, internal_read_prefix, cmd_buf + 1, 2);
+            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 2);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
+
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, internal_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -171,9 +177,8 @@ void handle_spi_transaction() {
         case CMD_DMA_READ:
         case CMD_DMA_EXT_READ: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
-            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
             uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? 5 : 6;
-            spi_write_read_blocking(SPI_PORT, dma_read_prefix, cmd_buf + 1, addr_size_bytes);
+            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -182,6 +187,10 @@ void handle_spi_transaction() {
             } else { // CMD_DMA_EXT_READ
                 size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
+
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, dma_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
@@ -249,7 +258,7 @@ void handle_spi_transaction() {
 
 void winc_simulator_app_log(void)
 {
-#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+#if (SIMULATOR_LOG_CORE_ENABLE == 1) && !defined(COMBINED_BUILD)
     if (multicore_fifo_wready())
     {
         multicore_fifo_push_blocking(0);
@@ -282,7 +291,7 @@ int winc_simulator_app_main() {
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
-#if (SIMULATOR_LOG_CORE_ENABLE == 1)
+#if (SIMULATOR_LOG_CORE_ENABLE == 1) && !defined(COMBINED_BUILD)
     SIM_LOG(SIM_LOG_TYPE_STRING, "Launching log core");
     winc_simulator_app_log();
     multicore_launch_core1(log_core_entry);
