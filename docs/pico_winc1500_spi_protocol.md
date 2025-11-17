@@ -68,12 +68,13 @@ This command is used to read a single word from a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_READ`  |
-| 1     | `0xF3` (Prefix)    |
-| 2     | Data[7:0]          |
-| 3     | Data[15:8]         |
-| 4     | Data[23:16]        |
-| 5     | Data[31:24]        |
+| 0     | `CMD_SINGLE_READ (0xca)`  |
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3     | Data[7:0]          |
+| 4     | Data[15:8]         |
+| 5     | Data[23:16]        |
+| 6     | Data[31:24]        |
 
 ### `CMD_INTERNAL_WRITE (0xc3)`
 
@@ -155,12 +156,13 @@ This command is used to read from an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_READ`|
-| 1     | `0xF3` (Prefix)    |
-| 2     | Data[7:0]          |
-| 3     | Data[15:8]         |
-| 4     | Data[23:16]        |
-| 5     | Data[31:24]        |
+| 0     | `CMD_INTERNAL_READ (0xc4)`|
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3     | Data[7:0]          |
+| 4     | Data[15:8]         |
+| 5     | Data[23:16]        |
+| 6     | Data[31:24]        |
 
 ### `CMD_DMA_EXT_READ (0xc8)`
 
@@ -183,8 +185,9 @@ This command is used to read a block of data from memory using extended DMA.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_DMA_EXT_READ` |
-| 1     | `0xFx` (Prefix)    |
-| 2..n  | Data               |
+| 1     | Status (0x00)      |
+| 2     | `0xFx` (Prefix)    |
+| 3..n  | Data               |
 
 ### `CMD_DMA_EXT_WRITE (0xc7)`
 
@@ -236,8 +239,9 @@ This command is used to read a block of data from memory using DMA.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_DMA_READ`     |
-| 1     | `0xF3` (Prefix)    |
-| 2..n  | Data               |
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3..n  | Data               |
 
 ### `CMD_DMA_WRITE (0xc1)`
 
@@ -272,11 +276,9 @@ This command is used to write a block of data to memory using DMA.
 
 After sending a command, the host must read the SPI bus to receive a response from the WINC1500. The first byte of the response is always an echo of the command that was sent.
 
-For DMA read commands (`CMD_DMA_READ`, `CMD_DMA_EXT_READ`), the second byte of the response is a `0xFx` prefix, followed by the requested data.
+For all read commands (`CMD_SINGLE_READ`, `CMD_INTERNAL_READ`, `CMD_DMA_READ`, `CMD_DMA_EXT_READ`), the second byte of the response is a status byte (`0x00`), followed by a `0xFx` prefix, and then the requested data.
 
 For write commands (`CMD_SINGLE_WRITE`, `CMD_INTERNAL_WRITE`, `CMD_DMA_WRITE`, `CMD_DMA_EXT_WRITE`), the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error. Note that for DMA write commands, the host is expected to send a `0xFx` prefix before the actual data.
-
-For other read commands (`CMD_SINGLE_READ`, `CMD_INTERNAL_READ`), the second byte of the response is a `0xF3` prefix, followed by the first byte of the requested data.
 
 ## Interrupt Handling
 

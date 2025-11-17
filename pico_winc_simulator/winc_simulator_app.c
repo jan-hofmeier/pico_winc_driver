@@ -92,9 +92,9 @@ void handle_spi_transaction() {
             spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
-            // Send command echo + 0xF3 prefix
-            uint8_t single_read_prefix[2] = {command, 0xF3};
-            spi_write_blocking(SPI_PORT, single_read_prefix, 2);
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, single_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -135,9 +135,9 @@ void handle_spi_transaction() {
             command_str = "INTERNAL_READ";
             log_type = SIM_LOG_TYPE_ADDRESS;
 
-            // Send command echo + 0xF3 prefix
-            uint8_t internal_read_prefix[2] = {command, 0xF3};
-            spi_write_blocking(SPI_PORT, internal_read_prefix, 2);
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, internal_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
@@ -185,9 +185,9 @@ void handle_spi_transaction() {
             command_str = (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ";
             log_type = SIM_LOG_TYPE_ADDRESS;
 
-            // Send command echo + 0xF3 prefix
-            uint8_t dma_read_prefix[2] = {command, 0xF3};
-            spi_write_blocking(SPI_PORT, dma_read_prefix, 2);
+            // Send command echo, status byte, and 0xF3 prefix
+            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
+            spi_write_blocking(SPI_PORT, dma_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
