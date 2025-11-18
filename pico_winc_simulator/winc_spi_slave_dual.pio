@@ -1,0 +1,29 @@
+.program spi_rx
+.wrap_target
+    wait 0 pin 17 ; Wait for CS to be asserted
+    set x, 7
+bit_loop_rx:
+    wait 1 pin 18
+    jmp pin abort_rx
+    in pins, 1
+    wait 0 pin 18
+    jmp x-- bit_loop_rx
+    push noblock
+abort_rx:
+    nop
+.wrap
+
+.program spi_tx
+.wrap_target
+    wait 0 pin 17 ; Wait for CS to be asserted
+    pull noblock
+    set x, 7
+bit_loop_tx:
+    wait 0 pin 18
+    out pins, 1
+    wait 1 pin 18
+    jmp pin abort_tx
+    jmp x-- bit_loop_tx
+abort_tx:
+    nop
+.wrap
