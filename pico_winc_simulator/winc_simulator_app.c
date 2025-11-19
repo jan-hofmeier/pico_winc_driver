@@ -91,7 +91,7 @@ static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
 // --- READ (RX) ---
 // Receive a byte from the Master.
 // If the FIFO is empty, this hangs until a byte arrives.
-static size_t spi_read_blocking(uint8_t dummy, uint8_t* buffer, size_t len) {
+static size_t spi_read_blocking(uint8_t* buffer, size_t len) {
     for(size_t i=0; i<len; i++){
         buffer[i] = (uint8_t) pio_sm_get_blocking(pio, sm_rx);
     }
@@ -114,7 +114,7 @@ void handle_spi_transaction() {
 
     // // Wait for the command byte
     do {
-        spi_read_blocking(0, &command, 1); // Read into 'command'
+        spi_read_blocking(&command, 1); // Read into 'command'
     } while(!command); // ignore zero bytes.
 
     // spi_read_blocking(0, cmd_buf, 4);
@@ -125,7 +125,7 @@ void handle_spi_transaction() {
     switch(command) {
         case CMD_SINGLE_READ: {
             // Read 3-byte address
-            spi_read_blocking(0, cmd_buf + 1, 3);
+            spi_read_blocking(cmd_buf + 1, 3);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
             // Send command echo, status byte, and 0xF3 prefix
@@ -145,7 +145,7 @@ void handle_spi_transaction() {
         }
         case CMD_SINGLE_WRITE: {
             // Read 3-byte address and 4-byte data
-            spi_read_blocking(0, cmd_buf + 1, 7);
+            spi_read_blocking(cmd_buf + 1, 7);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
 
@@ -159,7 +159,7 @@ void handle_spi_transaction() {
         }
         case CMD_INTERNAL_READ: {
             // Read 2-byte address
-            spi_read_blocking(0, cmd_buf + 1, 2);
+            spi_read_blocking(cmd_buf + 1, 2);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
 
             // Send command echo, status byte, and 0xF3 prefix
@@ -179,7 +179,7 @@ void handle_spi_transaction() {
         }
         case CMD_INTERNAL_WRITE: {
             // Read 2-byte address and 4-byte data
-            spi_read_blocking(0, cmd_buf + 1, 6);
+            spi_read_blocking(cmd_buf + 1, 6);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
 
@@ -195,7 +195,7 @@ void handle_spi_transaction() {
         case CMD_DMA_EXT_READ: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
             uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? 5 : 6;
-            spi_read_blocking(0, cmd_buf + 1, addr_size_bytes);
+            spi_read_blocking(cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -227,7 +227,7 @@ void handle_spi_transaction() {
         case CMD_DMA_EXT_WRITE: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_WRITE) or 3-byte size (for CMD_DMA_EXT_WRITE)
             uint8_t addr_size_bytes = (command == CMD_DMA_WRITE) ? 5 : 6;
-            spi_read_blocking(0, cmd_buf + 1, addr_size_bytes);
+            spi_read_blocking(cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -239,17 +239,17 @@ void handle_spi_transaction() {
 
             // Read and discard the 0xF3 prefix from the host
             uint8_t prefix_byte;
-            spi_read_blocking(0, &prefix_byte, 1);
+            spi_read_blocking(&prefix_byte, 1);
             // Optionally, log if prefix_byte is not 0xF3 for debugging
 
             // Read data and write to memory
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
-                spi_read_blocking(0, &winc_memory[addr], size);
+                spi_read_blocking(&winc_memory[addr], size);
             } else {
                 // Address out of bounds, just consume the data
                 uint8_t dummy_buf[256];
                 for (int i = 0; i < size; i += sizeof(dummy_buf)) {
-                    spi_read_blocking(0, dummy_buf, (size - i > sizeof(dummy_buf)) ? sizeof(dummy_buf) : (size - i));
+                    spi_read_blocking(dummy_buf, (size - i > sizeof(dummy_buf)) ? sizeof(dummy_buf) : (size - i));
                 }
             }
 
@@ -263,7 +263,7 @@ void handle_spi_transaction() {
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
             uint32_t dummy;
-            spi_read_blocking(0, (uint8_t*)&dummy, 8);
+            spi_read_blocking((uint8_t*)&dummy, 8);
             response_buf[1] = 0xFF; // Error status
             spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unknown Command", command, dummy);
