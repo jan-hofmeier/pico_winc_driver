@@ -80,6 +80,10 @@ bool sim_log_process_one_message(void) {
 static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
     for(size_t i=0; i<len; i++){
         pio_sm_put_blocking(pio0, sm_tx, (uint32_t)buffer[i] <<24 | 1);
+        // prevent rx fifo from filling up with dummy data
+        if(!pio_sm_is_rx_fifo_empty(pio, sm_rx)) {
+            pio_sm_get(pio, sm_rx);
+        }
     }
     return len;
 }
@@ -89,7 +93,6 @@ static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
 // If the FIFO is empty, this hangs until a byte arrives.
 static size_t spi_read_blocking(uint8_t dummy, uint8_t* buffer, size_t len) {
     for(size_t i=0; i<len; i++){
-        pio_sm_put_blocking(pio0, sm_tx, 0);
         buffer[i] = (uint8_t) pio_sm_get_blocking(pio, sm_rx);
     }
     return len;
