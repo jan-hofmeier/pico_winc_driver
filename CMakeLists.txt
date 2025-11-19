@@ -104,6 +104,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
     add_executable(pico_winc_simulator
         src/main_simulator_only.c
         pico_winc_simulator/winc_simulator_app.c
+        pico_winc_simulator/pio_spi.c
     )
     pico_generate_pio_header(pico_winc_simulator ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
     target_include_directories(pico_winc_simulator PUBLIC
@@ -122,6 +123,7 @@ elseif(BUILD_MODE STREQUAL "COMBINED")
         src/main_combined_app.c
         driver/winc_driver_app.c
         pico_winc_simulator/winc_simulator_app.c
+        pico_winc_simulator/pio_spi.c
         ${WINC_DRIVER_SOURCES}
     )
     pico_generate_pio_header(pico_winc_combined ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
