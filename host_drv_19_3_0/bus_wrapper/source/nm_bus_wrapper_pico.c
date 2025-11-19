@@ -74,7 +74,7 @@ sint8 nm_spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
 sint8 nm_bus_init(void *pvinit)
 {
     printf("nm_bus_init\n");
-    spi_init(CONF_WINC_SPI_PORT, 4 * 1000 * 1000);
+    spi_init(CONF_WINC_SPI_PORT, 1 * 1000 * 1000);
     spi_set_format(CONF_WINC_SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
     gpio_set_function(CONF_WINC_SPI_MISO_PIN, GPIO_FUNC_SPI);

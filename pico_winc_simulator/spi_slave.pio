@@ -1,0 +1,47 @@
+// --------------------------------------------------
+// RX Program
+// --------------------------------------------------
+.program spi_rx
+wait_cs:
+    wait 0 pin 1            ; Wait CS (17) Low
+.wrap_target
+    set x, 7
+bit_loop:
+    wait 0 pin 2            ; SCK (18) Low
+    wait 1 pin 2            ; SCK (18) High
+    jmp pin wait_cs         ; Abort Check (CS=17)
+    in pins, 1              ; Sample MOSI (16)
+    jmp x-- bit_loop
+    push noblock
+.wrap
+
+// --------------------------------------------------
+// TX Program (Sticky OSR + Bit Precision)
+// --------------------------------------------------
+.program spi_tx
+// Requirement: X = 0
+
+// 1. Abort Handler
+abort_reset:
+    wait 0 pin 1            ; Wait for NEXT transaction (CS Low)
+    // 1. Reset the counter (Start of new byte)
+    set y, 7
+    
+    // 2. SKIP THE 'OUT'! 
+    // The MISO pin is already holding the correct bit (from before the abort).
+    // We jump straight to waiting for the Master to read it.
+    jmp bit_loop_entry
+
+// 2. Normal Loop
+.wrap_target
+    set y, 7                ; Reset Bit Counter
+bit_loop:
+    out pins, 1             ; Output Next Bit    
+bit_loop_entry:             ; <--- Re-entry point for Abort
+    wait 1 pin 2            ; Wait SCK Rise (Master Reads)    
+    jmp pin abort_reset     ; Abort Check  
+    wait 0 pin 2            ; Wait SCK Fall
+    jmp y-- bit_loop
+public first_pull:
+    pull noblock            ; Load next byte
+.wrap

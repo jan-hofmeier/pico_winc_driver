@@ -2,11 +2,17 @@
 #include <string.h>
 #include <stdarg.h> // Required for va_list
 #include "pico/stdlib.h"
-#include "hardware/spi.h"
+#include "hardware/pio.h"
 #include "hardware/clocks.h" // Added for set_sys_clock_khz
+#include "spi_slave.pio.h"
 #include "winc1500_registers.h"
 #include "../config/conf_simulator.h"
 #include "winc_simulator_app.h"
+
+
+static PIO pio = pio0;
+static uint sm_rx;
+static uint sm_tx;
 
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
@@ -67,43 +73,75 @@ bool sim_log_process_one_message(void) {
     return false;
 }
 
+// --- WRITE (TX) ---
+// Send a byte to the Master.
+// If the FIFO is full, this hangs until there is space.
+static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
+    for(size_t i=0; i<len; i++){
+        pio_sm_put_blocking(pio0, sm_tx, buffer[i]);
+    }
+    return len;
+}
+
+// --- READ (RX) ---
+// Receive a byte from the Master.
+// If the FIFO is empty, this hangs until a byte arrives.
+static size_t spi_read_blocking(uint8_t dummy, uint8_t* buffer, size_t len) {
+    for(size_t i=0; i<len; i++){
+        pio_sm_put_blocking(pio0, sm_tx, 0);
+        buffer[i] = (uint8_t) pio_sm_get_blocking(pio, sm_rx);
+    }
+    return len;
+}
+
 void handle_spi_transaction() {
     uint8_t command;
     uint8_t cmd_buf[8]; // Buffer to hold command and address commanded by the host
     uint8_t data_buf[4]; // Buffer for read/write data in the host command
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
 
-    // Wait for the command byte
+    // uint8_t buff[16];
+    // int read = spi_read_blocking(0, buff, sizeof(buff)); // Read into 'command'
+    // printf("SIM SPI read %d bytes:");
+    // for(int i=0; i<read; i++)  {
+    //     printf(" %02X", buff[i]);
+    // }
+    // printf("\n");
+
+    // // Wait for the command byte
     do {
-        spi_read_blocking(SPI_PORT, 0, &command, 1); // Read into 'command'
+        spi_read_blocking(0, &command, 1); // Read into 'command'
     } while(!command); // ignore zero bytes.
+
+    // spi_read_blocking(0, cmd_buf, 4);
+    // printf("SIM SPI READ 0x%X: %08X\n", command, *(uint32_t*)cmd_buf);
 
     response_buf[0] = command; // Prepend command to response buffer
 
     switch(command) {
         case CMD_SINGLE_READ: {
             // Read 3-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 3);
+            spi_read_blocking(0, cmd_buf + 1, 3);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, single_read_prefix, 3);
+            spi_write_blocking(single_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
-                spi_write_blocking(SPI_PORT, &winc_memory[addr], 4);
+                spi_write_blocking(&winc_memory[addr], 4);
             } else {
                 // Address out of bounds, return zeros
                 uint8_t zero_buf[4] = {0};
-                spi_write_blocking(SPI_PORT, zero_buf, 4);
+                spi_write_blocking(zero_buf, 4);
             }
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ", addr, *(uint32_t*)(winc_memory+addr));
             break;
         }
         case CMD_SINGLE_WRITE: {
             // Read 3-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 7);
+            spi_read_blocking(0, cmd_buf + 1, 7);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
 
@@ -111,33 +149,33 @@ void handle_spi_transaction() {
                 memcpy(&winc_memory[addr], cmd_buf + 4, 4);
             }
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, *(uint32_t*)(cmd_buf + 4));
             break;
         }
         case CMD_INTERNAL_READ: {
             // Read 2-byte address
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 2);
+            spi_read_blocking(0, cmd_buf + 1, 2);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t internal_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, internal_read_prefix, 3);
+            spi_write_blocking(internal_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE - 4) {
-                spi_write_blocking(SPI_PORT, &winc_memory[addr], 4);
+                spi_write_blocking(&winc_memory[addr], 4);
             }
             else {
                 uint8_t zero_buf[4] = {0};
-                spi_write_blocking(SPI_PORT, zero_buf, 4);
+                spi_write_blocking(zero_buf, 4);
             }
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_READ", addr, *(uint32_t*)(winc_memory+addr));
             break;
         }
         case CMD_INTERNAL_WRITE: {
             // Read 2-byte address and 4-byte data
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, 6);
+            spi_read_blocking(0, cmd_buf + 1, 6);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
 
@@ -145,7 +183,7 @@ void handle_spi_transaction() {
                 memcpy(&winc_memory[addr], cmd_buf + 3, 4);
             }
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_WRITE", addr, *(uint32_t*)(cmd_buf + 3));
             break;
         }
@@ -153,7 +191,7 @@ void handle_spi_transaction() {
         case CMD_DMA_EXT_READ: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
             uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? 5 : 6;
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, addr_size_bytes);
+            spi_read_blocking(0, cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -165,17 +203,17 @@ void handle_spi_transaction() {
 
             // Send command echo, status byte, and 0xF3 prefix
             uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
-            spi_write_blocking(SPI_PORT, dma_read_prefix, 3);
+            spi_write_blocking(dma_read_prefix, 3);
 
             // Send data
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
-                spi_write_blocking(SPI_PORT, &winc_memory[addr], size);
+                spi_write_blocking(&winc_memory[addr], size);
             } else {
                 // Address out of bounds, send zeros
                 uint8_t zero_buf[256]; // Use a smaller buffer for sending zeros
                 memset(zero_buf, 0, sizeof(zero_buf));
                 for (int i = 0; i < size; i += sizeof(zero_buf)) {
-                    spi_write_blocking(SPI_PORT, zero_buf, (size - i > sizeof(zero_buf)) ? sizeof(zero_buf) : (size - i));
+                    spi_write_blocking(zero_buf, (size - i > sizeof(zero_buf)) ? sizeof(zero_buf) : (size - i));
                 }
             }
             SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ", addr, size);
@@ -185,7 +223,7 @@ void handle_spi_transaction() {
         case CMD_DMA_EXT_WRITE: {
             // Read 3-byte address and 2-byte size (for CMD_DMA_WRITE) or 3-byte size (for CMD_DMA_EXT_WRITE)
             uint8_t addr_size_bytes = (command == CMD_DMA_WRITE) ? 5 : 6;
-            spi_read_blocking(SPI_PORT, 0, cmd_buf + 1, addr_size_bytes);
+            spi_read_blocking(0, cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint16_t size;
@@ -197,22 +235,22 @@ void handle_spi_transaction() {
 
             // Read and discard the 0xF3 prefix from the host
             uint8_t prefix_byte;
-            spi_read_blocking(SPI_PORT, 0, &prefix_byte, 1);
+            spi_read_blocking(0, &prefix_byte, 1);
             // Optionally, log if prefix_byte is not 0xF3 for debugging
 
             // Read data and write to memory
             if (addr < WINC_MEM_SIZE && (addr + size) <= WINC_MEM_SIZE) {
-                spi_read_blocking(SPI_PORT, 0, &winc_memory[addr], size);
+                spi_read_blocking(0, &winc_memory[addr], size);
             } else {
                 // Address out of bounds, just consume the data
                 uint8_t dummy_buf[256];
                 for (int i = 0; i < size; i += sizeof(dummy_buf)) {
-                    spi_read_blocking(SPI_PORT, 0, dummy_buf, (size - i > sizeof(dummy_buf)) ? sizeof(dummy_buf) : (size - i));
+                    spi_read_blocking(0, dummy_buf, (size - i > sizeof(dummy_buf)) ? sizeof(dummy_buf) : (size - i));
                 }
             }
 
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, size);
             break;
         }
@@ -221,13 +259,103 @@ void handle_spi_transaction() {
             // For unknown commands, just consume a few bytes to prevent bus errors
             // and respond with a dummy status.
             uint32_t dummy;
-            spi_read_blocking(SPI_PORT, 0, (uint8_t*)&dummy, 8);
+            spi_read_blocking(0, (uint8_t*)&dummy, 8);
             response_buf[1] = 0xFF; // Error status
-            spi_write_blocking(SPI_PORT, response_buf, 2); // Write command + 1 byte status
+            spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unknown Command", command, dummy);
             break;
         }
     }
+}
+
+void spi_slave_init() {
+    sm_rx = pio_claim_unused_sm(pio, true);
+    sm_tx = pio_claim_unused_sm(pio, true);
+    
+    // 1. Load the PIO programs
+    uint offset_rx = pio_add_program(pio, &spi_rx_program);
+    uint offset_tx = pio_add_program(pio, &spi_tx_program);
+
+    // ============================================================
+    // RX STATE MACHINE CONFIGURATION
+    // ============================================================
+    pio_sm_config c_rx = spi_rx_program_get_default_config(offset_rx);
+
+    // Pin Configuration:
+    // Set IN Base to MOSI_PIN (16). 
+    // This allows the assembly to see:
+    //   - 'pin 0' = MOSI (16)
+    //   - 'pin 1' = CS   (17)
+    //   - 'pin 2' = SCK  (18)
+    sm_config_set_in_pins(&c_rx, MOSI_PIN);
+    
+    // Set JMP Pin to CS_PIN for the 'jmp pin' instruction
+    sm_config_set_jmp_pin(&c_rx, CS_PIN);
+
+    // Shift Configuration:
+    // Shift Left (false), Auto-Push (true), Threshold 8 bits
+    sm_config_set_in_shift(&c_rx, false, true, 8);
+    sm_config_set_fifo_join(&c_rx, PIO_FIFO_JOIN_RX); // Double RX FIFO depth
+
+    // GPIO Initialization:
+    pio_gpio_init(pio, MOSI_PIN);
+    pio_gpio_init(pio, CS_PIN);
+    pio_gpio_init(pio, SCK_PIN);
+    
+    // Set MOSI, CS, and SCK as Inputs.
+    // Since they are sequential (16,17,18), we can set 3 pins starting at MOSI_PIN.
+    pio_sm_set_consecutive_pindirs(pio, sm_rx, MOSI_PIN, 3, false);
+
+    // Enable RX SM
+    pio_sm_init(pio, sm_rx, offset_rx, &c_rx);
+    pio_sm_set_enabled(pio, sm_rx, true);
+
+
+    // ============================================================
+    // TX STATE MACHINE CONFIGURATION
+    // ============================================================
+    pio_sm_config c_tx = spi_tx_program_get_default_config(offset_tx);
+
+    // Pin Configuration:
+    // OUT Base: MISO_PIN (19)
+    sm_config_set_out_pins(&c_tx, MISO_PIN, 1);
+    
+    // IN Base: MOSI_PIN (16) - CRITICAL!
+    // Even though TX doesn't read MOSI, we set the IN base to 16 
+    // so that the 'wait pin 1' (CS) and 'wait pin 2' (SCK) instructions 
+    // point to the correct GPIOs relative to this base.
+    sm_config_set_in_pins(&c_tx, MOSI_PIN);
+    
+    // JMP Pin: CS_PIN (17)
+    sm_config_set_jmp_pin(&c_tx, CS_PIN);
+
+    // Shift Configuration:
+    // Shift Left (false), Auto-Pull (true), Threshold 8 bits
+    sm_config_set_out_shift(&c_tx, false, true, 8);
+    sm_config_set_fifo_join(&c_tx, PIO_FIFO_JOIN_TX); // Double TX FIFO depth
+
+    // GPIO Initialization:
+    pio_gpio_init(pio, MISO_PIN);
+    // Set MISO as Output
+    pio_sm_set_consecutive_pindirs(pio, sm_tx, MISO_PIN, 1, true);
+
+    // ------------------------------------------------------------
+    // TX Requirement 1: Zero Padding
+    // ------------------------------------------------------------
+    // Initialize the X register to 0. If the FIFO is empty, 
+    // 'pull noblock' uses X, ensuring we send 0x00 padding.
+    pio_sm_exec(pio, sm_tx, pio_encode_mov(pio_x, pio_null));
+
+    // ------------------------------------------------------------
+    // TX Requirement 2: Start at 'first_pull'
+    // ------------------------------------------------------------
+    // We start execution at the 'first_pull' label (bottom of assembly).
+    // This triggers an immediate pull to preload the OSR before the 
+    // first transaction begins.
+    uint start_offset = offset_tx + spi_tx_offset_first_pull;
+    
+    pio_sm_init(pio, sm_tx, start_offset, &c_tx);
+    pio_sm_set_enabled(pio, sm_tx, true);
 }
 
 #define LOG_PROCESS_INTERVAL 100 // Process log queue every 100 transactions
@@ -243,15 +371,7 @@ int winc_simulator_app_main() {
     uint32_t chip_id = 0x1002a0;
     memcpy(&winc_memory[CHIPID], &chip_id, sizeof(chip_id));
 
-    // SPI initialization
-    spi_init(SPI_PORT, 1000 * 1000); // 1 MHz clock
-    spi_set_slave(SPI_PORT, true);
-
-    // GPIO pin setup
-    gpio_set_function(MISO_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(SCK_PIN,  GPIO_FUNC_SPI);
-    gpio_set_function(MOSI_PIN, GPIO_FUNC_SPI);
-    gpio_set_function(CS_PIN,   GPIO_FUNC_SPI);
+    spi_slave_init();
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
