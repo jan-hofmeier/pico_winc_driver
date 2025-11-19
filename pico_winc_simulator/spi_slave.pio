@@ -45,3 +45,24 @@ bit_loop_entry:             ; <--- Re-entry point for Abort
 public first_pull:
     pull noblock            ; Load next byte
 .wrap
+
+
+// --------------------------------------------------
+// 3. Tristate Control Program (Side-Set Optimized)
+// --------------------------------------------------
+.program spi_tristate
+.side_set 1 pindirs
+
+// Config: 
+// - IN Base: CS (17)
+// - SIDESET Base: MISO (19)
+
+.wrap_target
+    // Wait for CS(0) to be Low.
+    // side 0: Force MISO to Input (Hi-Z) continuously while waiting.
+    wait 0 pin 0        side 0
+
+    // Wait for CS(0) to be High.
+    // side 1: Force MISO to Output (Drive) continuously while active.
+    wait 1 pin 0        side 1
+.wrap

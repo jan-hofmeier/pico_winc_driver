@@ -13,6 +13,7 @@
 static PIO pio = pio0;
 static uint sm_rx;
 static uint sm_tx;
+static uint sm_oe;
 
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
@@ -271,10 +272,12 @@ void handle_spi_transaction() {
 void spi_slave_init() {
     sm_rx = pio_claim_unused_sm(pio, true);
     sm_tx = pio_claim_unused_sm(pio, true);
+    sm_oe = pio_claim_unused_sm(pio, true);
 
     // 1. Load the PIO programs
     uint offset_rx = pio_add_program(pio, &spi_rx_program);
     uint offset_tx = pio_add_program(pio, &spi_tx_program);
+    uint offset_oe = pio_add_program(pio, &spi_tristate_program);
 
     // ============================================================
     // RX STATE MACHINE CONFIGURATION
@@ -312,6 +315,25 @@ void spi_slave_init() {
 
 
     // ============================================================
+    // OE SETUP (Tristate Control)
+    // ============================================================
+    pio_sm_config c_oe = spi_tristate_program_get_default_config(offset_oe);
+
+    // IN Base = CS (17) -> 'wait' monitors CS
+    sm_config_set_in_pins(&c_oe, CS_PIN);
+    
+    // SIDESET Base = MISO (19) -> controls Direction
+    sm_config_set_sideset_pins(&c_oe, MISO_PIN);
+    
+    // GPIO Init for MISO
+    pio_gpio_init(pio, MISO_PIN);
+    // Start as Input (Hi-Z)
+    pio_sm_set_consecutive_pindirs(pio, sm_oe, MISO_PIN, 1, false);
+
+    pio_sm_init(pio, sm_oe, offset_oe, &c_oe);
+    pio_sm_set_enabled(pio, sm_oe, true);
+
+    // ============================================================
     // TX STATE MACHINE CONFIGURATION
     // ============================================================
     pio_sm_config c_tx = spi_tx_program_get_default_config(offset_tx);
@@ -337,7 +359,7 @@ void spi_slave_init() {
     // GPIO Initialization:
     pio_gpio_init(pio, MISO_PIN);
     // Set MISO as Output
-    pio_sm_set_consecutive_pindirs(pio, sm_tx, MISO_PIN, 1, true);
+    pio_sm_set_consecutive_pindirs(pio, sm_tx, MISO_PIN, 1, false);
 
     // ------------------------------------------------------------
     // TX Requirement 1: Zero Padding
