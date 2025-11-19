@@ -79,7 +79,7 @@ bool sim_log_process_one_message(void) {
 // If the FIFO is full, this hangs until there is space.
 static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
     for(size_t i=0; i<len; i++){
-        pio_sm_put_blocking(pio0, sm_tx, (uint32_t)buffer[i] <<24);
+        pio_sm_put_blocking(pio0, sm_tx, (uint32_t)buffer[i] <<24 | 1);
     }
     return len;
 }

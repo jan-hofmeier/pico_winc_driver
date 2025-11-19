@@ -23,27 +23,26 @@ bit_loop:
 
 // 1. Abort Handler
 abort_reset:
+    mov y, osr
     wait 0 pin 1            ; Wait for NEXT transaction (CS Low)
+    jmp !y first_pull       ; pull if we don't already have valid data 
     // 1. Reset the counter (Start of new byte)
     set y, 7
     
     // 2. SKIP THE 'OUT'! 
     // The MISO pin is already holding the correct bit (from before the abort).
     // We jump straight to waiting for the Master to read it.
-    jmp bit_loop_entry
-
 // 2. Normal Loop
-.wrap_target
-    set y, 7                ; Reset Bit Counter
-bit_loop:
-    out pins, 1             ; Output Next Bit    
-bit_loop_entry:             ; <--- Re-entry point for Abort
+.wrap_target  
     wait 1 pin 2            ; Wait SCK Rise (Master Reads)    
     jmp pin abort_reset     ; Abort Check  
     wait 0 pin 2            ; Wait SCK Fall
     jmp y-- bit_loop
 public first_pull:
     pull noblock            ; Load next byte
+    set y, 7                ; Reset Bit Counter
+bit_loop:
+    out pins, 1             ; Output Next Bit  
 .wrap
 
 
