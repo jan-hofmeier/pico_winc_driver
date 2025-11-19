@@ -78,7 +78,7 @@ bool sim_log_process_one_message(void) {
 // If the FIFO is full, this hangs until there is space.
 static size_t spi_write_blocking(uint8_t* buffer, size_t len) {
     for(size_t i=0; i<len; i++){
-        pio_sm_put_blocking(pio0, sm_tx, buffer[i]);
+        pio_sm_put_blocking(pio0, sm_tx, (uint32_t)buffer[i] <<24);
     }
     return len;
 }
@@ -271,7 +271,7 @@ void handle_spi_transaction() {
 void spi_slave_init() {
     sm_rx = pio_claim_unused_sm(pio, true);
     sm_tx = pio_claim_unused_sm(pio, true);
-    
+
     // 1. Load the PIO programs
     uint offset_rx = pio_add_program(pio, &spi_rx_program);
     uint offset_tx = pio_add_program(pio, &spi_tx_program);
@@ -294,7 +294,7 @@ void spi_slave_init() {
 
     // Shift Configuration:
     // Shift Left (false), Auto-Push (true), Threshold 8 bits
-    sm_config_set_in_shift(&c_rx, false, true, 8);
+    sm_config_set_in_shift(&c_rx, false, false, 8);
     sm_config_set_fifo_join(&c_rx, PIO_FIFO_JOIN_RX); // Double RX FIFO depth
 
     // GPIO Initialization:
@@ -331,7 +331,7 @@ void spi_slave_init() {
 
     // Shift Configuration:
     // Shift Left (false), Auto-Pull (true), Threshold 8 bits
-    sm_config_set_out_shift(&c_tx, false, true, 8);
+    sm_config_set_out_shift(&c_tx, false, false, 8);
     sm_config_set_fifo_join(&c_tx, PIO_FIFO_JOIN_TX); // Double TX FIFO depth
 
     // GPIO Initialization:
