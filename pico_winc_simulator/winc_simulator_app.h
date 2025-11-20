@@ -5,7 +5,7 @@
 #include "sim_log.h"
 
 // Define WINC memory size
-#define WINC_MEM_SIZE (1024 * 16) // 16KB for simulation
+#define WINC_MEM_SIZE (1024 * 192) // 192KB for simulation
 
 // WINC1500 SPI commands (simplified for simulator)
 #define CMD_SINGLE_READ         0xca

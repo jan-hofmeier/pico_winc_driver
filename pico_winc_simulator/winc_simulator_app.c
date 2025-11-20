@@ -13,9 +13,11 @@ uint8_t winc_memory[WINC_MEM_SIZE];
 uint8_t clockless_regs[256];
 uint8_t periph_regs[4096];
 uint8_t spi_regs[256];
+uint8_t bootrom_regs[256];
 
 // CRC state
 bool crc_off = false;
+bool reset_triggered = false;
 
 // Function to get a pointer to the correct memory location
 uint8_t* get_memory_ptr(uint32_t addr) {
@@ -25,6 +27,8 @@ uint8_t* get_memory_ptr(uint32_t addr) {
         return &periph_regs[addr - 0x1000];
     } else if (addr >= 0xe800 && addr < 0xe900) {
         return &spi_regs[addr - 0xe800];
+    } else if (addr >= 0xc0000 && addr < 0xc0100) {
+        return &bootrom_regs[addr - 0xc0000];
     }
     return &winc_memory[addr];
 }
@@ -76,7 +80,19 @@ void handle_spi_transaction() {
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 3 : 4);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
-            if (addr > WINC_MEM_SIZE - 4 && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900)) {
+            if (addr == NMI_STATE_REG && reset_triggered) {
+                uint32_t state_reg = 0x02532636;
+                // Send command echo, status byte, and 0xF3 prefix
+                uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
+                pio_spi_write_blocking(single_read_prefix, 3);
+                // Send data
+                spi_send_data_with_crc((uint8_t*)&state_reg, 4);
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ (reset)", addr, state_reg);
+                reset_triggered = false; // Clear the flag
+                break;
+            }
+
+            if (addr > WINC_MEM_SIZE - 4 && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900)  && (addr < 0xc0000 || addr >= 0xc0100)) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ OOB", addr, 0);
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -98,7 +114,16 @@ void handle_spi_transaction() {
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 7 : 8);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
 
-            if (addr > WINC_MEM_SIZE - 4 && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900)) {
+            if (addr == CHIPID) {
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "Software Reset", 0, 0);
+                reset_triggered = true;
+                // Don't actually write to CHIPID
+                response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
+                pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
+                break;
+            }
+
+            if (addr > WINC_MEM_SIZE - 4 && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900) && (addr < 0xc0000 || addr >= 0xc0100)) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE OOB", addr, *(uint32_t*)(cmd_buf + 4));
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -118,7 +143,7 @@ void handle_spi_transaction() {
             if(cmd_buf[1] & 0x80) addr &= ~0x8000;
 
 
-            if (addr > 0xff && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900)) {
+            if (addr > 0xff && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900) && (addr < 0xc0000 || addr >= 0xc0100)) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_READ OOB", addr, 0);
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -232,6 +257,12 @@ void handle_spi_transaction() {
             SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, size);
             break;
         }
+        case CMD_RESET: {
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "CMD_RESET", 0, 0);
+            response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
+            pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
+            break;
+        }
         // TODO: Implement other commands (DMA, RESET, etc.)
         default: {
             // For unknown commands, just consume a few bytes to prevent bus errors
@@ -259,12 +290,21 @@ int winc_simulator_app_main() {
     memset(clockless_regs, 0, sizeof(clockless_regs));
     memset(periph_regs, 0, sizeof(periph_regs));
     memset(spi_regs, 0, sizeof(spi_regs));
+    memset(bootrom_regs, 0, sizeof(bootrom_regs));
 
     // Pre-populate some read-only registers with default values
     uint32_t chip_id = 0x001002b0;
     memcpy(get_memory_ptr(CHIPID), &chip_id, sizeof(chip_id));
     uint32_t rev_id = 0x00000004;
     memcpy(get_memory_ptr(0x13f4), &rev_id, sizeof(rev_id));
+    uint32_t proto_conf = 0x2E;
+    memcpy(get_memory_ptr(NMI_SPI_PROTOCOL_CONFIG), &proto_conf, sizeof(proto_conf));
+    uint32_t state_reg = 0x02532636;
+    memcpy(get_memory_ptr(NMI_STATE_REG), &state_reg, sizeof(state_reg));
+    uint32_t wait_for_host = 0x3f00;
+    memcpy(get_memory_ptr(M2M_WAIT_FOR_HOST_REG), &wait_for_host, sizeof(wait_for_host));
+    uint32_t reg_1014 = 0x807c082d;
+    memcpy(get_memory_ptr(0x1014), &reg_1014, sizeof(reg_1014));
 
     pio_spi_slave_init();
 
