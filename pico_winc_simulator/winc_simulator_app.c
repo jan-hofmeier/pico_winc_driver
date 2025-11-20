@@ -31,8 +31,10 @@ void handle_spi_transaction() {
 
     // // Wait for the command byte
     do {
-        pio_spi_read_blocking(&command, 1); // Read into 'command'
-    } while(!command); // ignore zero bytes.
+        pio_spi_read_blocking(&cmd_buf, 1); // Read into 'command'
+    } while(!cmd_buf[0]); // ignore zero bytes.
+
+    command = cmd_buf[0];
 
     // spi_read_blocking(0, cmd_buf, 4);
     // printf("SIM SPI READ 0x%X: %08X\n", command, *(uint32_t*)cmd_buf);
