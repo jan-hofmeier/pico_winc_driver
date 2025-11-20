@@ -308,6 +308,10 @@ int winc_simulator_app_main() {
     memcpy(get_memory_ptr(0x1014), &reg_1014, sizeof(reg_1014));
     uint32_t bootrom_reg = 0x10add09e;
     memcpy(get_memory_ptr(BOOTROM_REG), &bootrom_reg, sizeof(bootrom_reg));
+    uint32_t pin_mux_0 = 0x31111044;
+    memcpy(get_memory_ptr(NMI_PIN_MUX_0), &pin_mux_0, sizeof(pin_mux_0));
+    uint32_t rev_reg = 0x1330134a;
+    memcpy(get_memory_ptr(NMI_REV_REG), &rev_reg, sizeof(rev_reg));
 
     pio_spi_slave_init();
 
