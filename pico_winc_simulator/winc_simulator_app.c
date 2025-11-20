@@ -261,8 +261,10 @@ int winc_simulator_app_main() {
     memset(spi_regs, 0, sizeof(spi_regs));
 
     // Pre-populate some read-only registers with default values
-    uint32_t chip_id = 0x1002a0;
+    uint32_t chip_id = 0x001002b0;
     memcpy(get_memory_ptr(CHIPID), &chip_id, sizeof(chip_id));
+    uint32_t rev_id = 0x00000004;
+    memcpy(get_memory_ptr(0x13f4), &rev_id, sizeof(rev_id));
 
     pio_spi_slave_init();
 
