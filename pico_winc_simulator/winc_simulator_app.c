@@ -130,10 +130,11 @@ void handle_spi_transaction() {
                 break;
             }
             
-            memcpy(get_memory_ptr(addr), cmd_buf + 4, 4);
+            uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
+            memcpy(get_memory_ptr(addr), &data_val, 4);
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, *(uint32_t*)(cmd_buf + 4));
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, data_val);
             break;
         }
         case CMD_INTERNAL_READ: {
@@ -180,7 +181,7 @@ void handle_spi_transaction() {
                 break;
             }
 
-            memcpy(get_memory_ptr(addr), cmd_buf + 3, 4);
+            memcpy(get_memory_ptr(addr), &data_val, 4);
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_WRITE", addr, data_val);
