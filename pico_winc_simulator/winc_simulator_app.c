@@ -173,7 +173,7 @@ void handle_spi_transaction() {
                 }
             }
 
-            if (addr > 0xff && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900)) {
+            if (addr > 0xff && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900) && (addr < 0xc0000 || addr >= 0xc0100)) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_WRITE OOB", addr, data_val);
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -305,6 +305,8 @@ int winc_simulator_app_main() {
     memcpy(get_memory_ptr(M2M_WAIT_FOR_HOST_REG), &wait_for_host, sizeof(wait_for_host));
     uint32_t reg_1014 = 0x807c082d;
     memcpy(get_memory_ptr(0x1014), &reg_1014, sizeof(reg_1014));
+    uint32_t bootrom_reg = 0x10add09e;
+    memcpy(get_memory_ptr(BOOTROM_REG), &bootrom_reg, sizeof(bootrom_reg));
 
     pio_spi_slave_init();
 
