@@ -27,13 +27,13 @@
 #define WIFI_HOST_RCV_CTRL_3    0x106C
 #define WIFI_HOST_RCV_CTRL_5    0x1088
 #define NMI_SPI_REG_BASE        0xE800
-#define NMI_SPI_PROTOCOL_CONFIG 0xE824  // Bits 2 and 3 control CRC
 #define NMI_SPI_CTL             (NMI_SPI_REG_BASE)
 #define NMI_SPI_MASTER_DMA_ADDR (NMI_SPI_REG_BASE+0x4)
 #define NMI_SPI_MASTER_DMA_COUNT (NMI_SPI_REG_BASE+0x8)
 #define NMI_SPI_SLAVE_DMA_ADDR  (NMI_SPI_REG_BASE+0xc)
 #define NMI_SPI_SLAVE_DMA_COUNT (NMI_SPI_REG_BASE+0x10)
 #define NMI_SPI_TX_MODE         (NMI_SPI_REG_BASE+0x20)
+#define NMI_SPI_PROTOCOL_CONFIG (NMI_SPI_REG_BASE+0x24) // Bits 2 and 3 control CRC
 #define NMI_SPI_INTR_CTL        (NMI_SPI_REG_BASE+0x2c)
 #define WAKE_CLK_REG            0x1
 #define CLOCKS_EN_REG           0xF
