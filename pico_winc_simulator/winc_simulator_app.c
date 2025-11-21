@@ -6,6 +6,9 @@
 #include "winc_simulator_app.h"
 #include "pio_spi.h"
 
+#define MAX_SPI_PACKET_SIZE 8192
+
+
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
 uint8_t clockless_regs[256];
@@ -226,43 +229,66 @@ void handle_spi_transaction() {
             pio_spi_read_blocking(cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-            uint32_t size;
+            uint32_t total_size;
             if (command == CMD_DMA_WRITE) {
-                size = (cmd_buf[4] << 8) | cmd_buf[5];
+                total_size = (cmd_buf[4] << 8) | cmd_buf[5];
             } else { // CMD_DMA_EXT_WRITE
-                size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
+                total_size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
 
-            uint8_t prefix_byte;
-            do {
-                pio_spi_read_blocking(&prefix_byte, 1);
-            } while (prefix_byte == 0);
+            uint32_t remaining_size = total_size;
+            uint32_t bytes_written = 0;
+            bool oob_error = false;
 
-            if ((prefix_byte & 0xF0) != 0xF0) {
-                SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unexpected DMA prefix", prefix_byte, 0);
-            }
+            while (remaining_size > 0) {
+                uint8_t prefix_byte;
+                do {
+                    pio_spi_read_blocking(&prefix_byte, 1);
+                } while (prefix_byte == 0);
 
-            uint8_t *mem_ptr = get_memory_ptr(addr, size);
-            if(mem_ptr == NULL) {
-                 uint8_t dummy_buf[256];
-                uint32_t remaining_size = size;
-                while(remaining_size > 0) {
-                    uint32_t read_size = (remaining_size > sizeof(dummy_buf)) ? sizeof(dummy_buf) : remaining_size;
-                    pio_spi_read_blocking(dummy_buf, read_size);
-                    remaining_size -= read_size;
+                if ((prefix_byte & 0xF0) != 0xF0) {
+                    SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unexpected DMA prefix", prefix_byte, 0);
+                    // The host driver seems to continue even if the prefix is wrong.
+                    // We will do the same and just log it.
                 }
+
+                uint32_t chunk_size = (remaining_size > MAX_SPI_PACKET_SIZE) ? MAX_SPI_PACKET_SIZE : remaining_size;
+
+                uint8_t* mem_ptr = get_memory_ptr(addr + bytes_written, chunk_size);
+                if (mem_ptr == NULL || oob_error) {
+                    if (!oob_error) { // Log only on the first OOB occurrence
+                        SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB DMA write", addr + bytes_written, chunk_size);
+                        oob_error = true;
+                    }
+                    // Discard the chunk
+                    uint8_t dummy_buf[256];
+                    uint32_t discard_remaining = chunk_size;
+                    while(discard_remaining > 0) {
+                        uint32_t read_size = (discard_remaining > sizeof(dummy_buf)) ? sizeof(dummy_buf) : discard_remaining;
+                        pio_spi_read_blocking(dummy_buf, read_size);
+                        discard_remaining -= read_size;
+                    }
+                } else {
+                    // Read data into memory
+                    pio_spi_read_blocking(mem_ptr, chunk_size);
+                }
+
+                // After every chunk, there is a CRC
                 spi_read_dummy_crc_if_needed_on_write();
-                response_buf[1] = 0xFF; // Respond with status byte (error)
-                pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
-                break;
+                
+                remaining_size -= chunk_size;
+                bytes_written += chunk_size;
             }
 
-            // Read data and write to memory
-            spi_receive_data_and_crc(mem_ptr, size);
-            
-            response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
-            pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, size);
+            // After the loop, send the response
+            if (oob_error) {
+                response_buf[1] = 0xFF; // Error
+            } else {
+                response_buf[1] = 0x00; // Success
+            }
+            pio_spi_write_blocking(response_buf, 2);
+
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, total_size);
             break;
         }
         case CMD_RESET: {
