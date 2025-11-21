@@ -6,14 +6,14 @@
 #include "winc_simulator_app.h"
 #include "pio_spi.h"
 
-
-
 // Global WINC memory simulation
 uint8_t winc_memory[WINC_MEM_SIZE];
 uint8_t clockless_regs[256];
 uint8_t periph_regs[4096];
 uint8_t spi_regs[256];
 uint8_t bootrom_regs[256];
+uint32_t g_dma_addr = 0;
+int rx_req_clear_countdown = -1;
 
 // CRC state
 bool crc_off = false;
@@ -63,14 +63,26 @@ void spi_receive_data_and_crc(uint8_t *data, uint32_t size) {
 
 void handle_spi_transaction() {
     uint8_t command;
-    uint8_t cmd_buf[8]; // Buffer to hold command and address commanded by the host
-    uint8_t data_buf[4]; // Buffer for read/write data in the host command
+    uint8_t cmd_buf[12]; // Increased buffer size for safety
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
 
-    // // Wait for the command byte
+    // Check if we need to clear the RX_REQ bit
+    if (rx_req_clear_countdown > 0) {
+        rx_req_clear_countdown--;
+        if (rx_req_clear_countdown == 0) {
+            uint32_t ctrl2_val;
+            memcpy(&ctrl2_val, get_memory_ptr(WIFI_HOST_RCV_CTRL_2), 4);
+            ctrl2_val &= ~0x2; // Clear RX_REQ bit
+            memcpy(get_memory_ptr(WIFI_HOST_RCV_CTRL_2), &ctrl2_val, 4);
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "RX_REQ cleared", WIFI_HOST_RCV_CTRL_2, 0);
+            rx_req_clear_countdown = -1;
+        }
+    }
+    
+    // Wait for the command byte
     do {
         pio_spi_read_blocking(&command, 1); // Read into 'command'
-    } while(!command); // ignore zero bytes.
+    } while(!command); // ignore zero bytes. 
 
     response_buf[0] = command; // Prepend command to response buffer
 
@@ -79,6 +91,18 @@ void handle_spi_transaction() {
             // Read 3-byte address and 1 byte crc
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 3 : 4);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
+
+            if (addr == 0x150400) {
+                // This is the fake DMA address read, provide the stored address
+                uint32_t dma_addr = g_dma_addr;
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "DMA address provided", addr, dma_addr);
+                
+                // Respond with the DMA address
+                uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
+                pio_spi_write_blocking(single_read_prefix, 3);
+                spi_send_data_with_crc((uint8_t*)&dma_addr, 4);
+                break;
+            }
 
             if (addr == NMI_STATE_REG && reset_triggered) {
                 uint32_t state_reg = 0x02532636;
@@ -113,6 +137,7 @@ void handle_spi_transaction() {
             // Read 3-byte address and 4-byte data and 1 byte crc
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 7 : 8);
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
+            uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7]; // Correct endianness
 
             if (addr == CHIPID) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "Software Reset", 0, 0);
@@ -122,16 +147,22 @@ void handle_spi_transaction() {
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
                 break;
             }
+            
+            if (addr == WIFI_HOST_RCV_CTRL_2 && (data_val & 0x2)) {
+                g_dma_addr = 0x10000; // Set a dummy DMA address
+                rx_req_clear_countdown = 2; // Clear the bit after 2 transactions
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "RX_REQ set, DMA address prepared", addr, g_dma_addr);
+            }
 
             if (addr > WINC_MEM_SIZE - 4 && (addr < 0x1000 || addr >= 0x2000) && (addr < 0xe800 || addr >= 0xe900) && (addr < 0xc0000 || addr >= 0xc0100)) {
-                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE OOB", addr, *(uint32_t*)(cmd_buf + 4));
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE OOB", addr, data_val);
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
                 break;
             }
             
-            uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
             memcpy(get_memory_ptr(addr), &data_val, 4);
+
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, data_val);
@@ -140,7 +171,7 @@ void handle_spi_transaction() {
         case CMD_INTERNAL_READ: {
             // Read 2-byte address and 1 byte dummy and 1 byte crc
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 3 : 4);
-            uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
+            uint32_t addr = (cmd_buf[1] << 8) | cmd_buf[2];
             if(cmd_buf[1] & 0x80) addr &= ~0x8000;
 
 
@@ -165,7 +196,7 @@ void handle_spi_transaction() {
             pio_spi_read_blocking(cmd_buf + 1, crc_off ? 6 : 7);
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             if(cmd_buf[1] & 0x80) addr &= ~0x8000;
-            uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
+            uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6]; // Correct endianness
 
             if (addr == NMI_SPI_PROTOCOL_CONFIG) {
                 if ((data_val & 0xc) == 0) {
@@ -180,7 +211,7 @@ void handle_spi_transaction() {
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
                 break;
             }
-
+            
             memcpy(get_memory_ptr(addr), &data_val, 4);
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -294,9 +325,9 @@ int winc_simulator_app_main() {
     memset(bootrom_regs, 0, sizeof(bootrom_regs));
 
     // Pre-populate some read-only registers with default values
-    uint32_t chip_id = 0x001002b0;
+    uint32_t chip_id = 0x1002b0;
     memcpy(get_memory_ptr(CHIPID), &chip_id, sizeof(chip_id));
-    uint32_t rev_id = 0x00000004;
+    uint32_t rev_id = 0x4;
     memcpy(get_memory_ptr(0x13f4), &rev_id, sizeof(rev_id));
     uint32_t proto_conf = 0x2E;
     memcpy(get_memory_ptr(NMI_SPI_PROTOCOL_CONFIG), &proto_conf, sizeof(proto_conf));
