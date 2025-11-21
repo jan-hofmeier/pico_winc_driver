@@ -19,35 +19,15 @@ bool reset_triggered = false;
 
 // Function to get a pointer to the correct memory location, with OOB checks
 uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {
-    if (addr <= 0xff) { // clockless_regs
-        if ((addr + size) > 0x100) {
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB clockless_regs", addr, size);
-            return NULL;
-        }
+    if ((addr + size) <= 0x100) { // clockless_regs
         return &clockless_regs[addr];
-    } else if (addr >= 0x1000 && addr < 0x2000) { // periph_regs
-        if ((addr - 0x1000 + size) > 4096) {
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB periph_regs", addr, size);
-            return NULL;
-        }
+    } else if (addr >= 0x1000 && (addr + size) <= 0x2000) { // periph_regs
         return &periph_regs[addr - 0x1000];
-    } else if (addr >= 0xe800 && addr < 0xe900) { // spi_regs
-        if ((addr - 0xe800 + size) > 256) {
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB spi_regs", addr, size);
-            return NULL;
-        }
+    } else if (addr >= 0xe800 && (addr + size) <= 0xe900) { // spi_regs
         return &spi_regs[addr - 0xe800];
-    } else if (addr >= 0xc0000 && addr < 0xc0100) { // bootrom_regs
-        if ((addr - 0xc0000 + size) > 256) {
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB bootrom_regs", addr, size);
-            return NULL;
-        }
+    } else if (addr >= 0xc0000 && (addr + size) <= 0xc0100) { // bootrom_regs
         return &bootrom_regs[addr - 0xc0000];
-    } else if (addr < WINC_MEM_SIZE) { // winc_memory
-        if ((addr + size) > WINC_MEM_SIZE) {
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB winc_memory", addr, size);
-            return NULL;
-        }
+    } else if ((addr + size) <= WINC_MEM_SIZE) { // winc_memory
         return &winc_memory[addr];
     }
     SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB unknown region", addr, size);
