@@ -223,12 +223,7 @@ void handle_spi_transaction() {
             while (remaining_size > 0) {
                 uint32_t chunk_size = (remaining_size > MAX_SPI_PACKET_SIZE) ? MAX_SPI_PACKET_SIZE : remaining_size;
                 
-                uint8_t prefix_byte;
-                if (bytes_read == 0) { // First packet
-                    prefix_byte = (remaining_size <= MAX_SPI_PACKET_SIZE) ? 0xF3 : 0xF1;
-                } else { // Middle or last packet
-                    prefix_byte = (remaining_size <= MAX_SPI_PACKET_SIZE) ? 0xF3 : 0xF2;
-                }
+                uint8_t prefix_byte = remaining_size <= MAX_SPI_PACKET_SIZE ? 0xF3 : bytes_read ? 0xF2 : 0xF1;
                 pio_spi_write_blocking(&prefix_byte, 1);
                 
                 // Send data from memory
