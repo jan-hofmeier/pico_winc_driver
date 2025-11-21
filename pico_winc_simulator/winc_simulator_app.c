@@ -198,28 +198,47 @@ void handle_spi_transaction() {
             pio_spi_read_blocking(cmd_buf + 1, addr_size_bytes);
 
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
-            uint32_t size;
+            uint32_t total_size;
             if (command == CMD_DMA_READ) {
-                size = (cmd_buf[4] << 8) | cmd_buf[5];
+                total_size = (cmd_buf[4] << 8) | cmd_buf[5];
             } else { // CMD_DMA_EXT_READ
-                size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
+                total_size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
-            
-            uint8_t *mem_ptr = get_memory_ptr(addr, size);
+
+            uint8_t *mem_ptr = get_memory_ptr(addr, total_size);
             if(mem_ptr == NULL) {
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB DMA read", addr, total_size);
                 break;
             }
 
-            // Send command echo, status byte, and 0xF3 prefix
-            uint8_t dma_read_prefix[3] = {command, 0x00, 0xF3};
-            pio_spi_write_blocking(dma_read_prefix, 3);
+            // Send command echo and status byte
+            response_buf[1] = 0x00;
+            pio_spi_write_blocking(response_buf, 2);
 
-            // Send data
-            spi_send_data_with_crc(mem_ptr, size);
+            uint32_t remaining_size = total_size;
+            uint32_t bytes_read = 0;
 
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ", addr, size);
+            while (remaining_size > 0) {
+                uint32_t chunk_size = (remaining_size > MAX_SPI_PACKET_SIZE) ? MAX_SPI_PACKET_SIZE : remaining_size;
+                
+                uint8_t prefix_byte;
+                if (bytes_read == 0) { // First packet
+                    prefix_byte = (remaining_size <= MAX_SPI_PACKET_SIZE) ? 0xF3 : 0xF1;
+                } else { // Middle or last packet
+                    prefix_byte = (remaining_size <= MAX_SPI_PACKET_SIZE) ? 0xF3 : 0xF2;
+                }
+                pio_spi_write_blocking(&prefix_byte, 1);
+                
+                // Send data from memory
+                spi_send_data_with_crc(mem_ptr + bytes_read, chunk_size);
+                
+                remaining_size -= chunk_size;
+                bytes_read += chunk_size;
+            }
+
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_READ) ? "DMA_READ" : "DMA_EXT_READ", addr, total_size);
             break;
         }
         case CMD_DMA_WRITE:
