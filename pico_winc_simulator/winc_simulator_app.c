@@ -333,36 +333,43 @@ void winc_spi_interrupt_handler(void) {
 
     pending_command = command;
     size_t bytes_to_read = 0;
+    bool has_crc = true;
 
     switch(command) {
         case CMD_SINGLE_READ:
-            bytes_to_read = crc_off ? 3 : 4;
+            bytes_to_read = 3;
             break;
         case CMD_SINGLE_WRITE:
-            bytes_to_read = crc_off ? 7 : 8;
+            bytes_to_read = 7;
             break;
         case CMD_INTERNAL_READ:
-            bytes_to_read = crc_off ? 3 : 4;
+            bytes_to_read = 3;
             break;
         case CMD_INTERNAL_WRITE:
-            bytes_to_read = crc_off ? 6 : 7;
+            bytes_to_read = 6;
             break;
         case CMD_DMA_READ:
         case CMD_DMA_WRITE:
-            bytes_to_read = crc_off ? 5 : 6;
+            bytes_to_read = 5;
             break;
         case CMD_DMA_EXT_READ:
         case CMD_DMA_EXT_WRITE:
-            bytes_to_read = crc_off ? 6 : 7;
+            bytes_to_read = 6;
             break;
         case CMD_RESET:
             bytes_to_read = 0;
+            has_crc = false;
             break;
         default:
             // Unknown command, maybe read some dummy bytes?
             // Original code read 8 bytes.
             bytes_to_read = 8;
+            has_crc = false;
             break;
+    }
+
+    if (has_crc && !crc_off) {
+        bytes_to_read++;
     }
 
     if (bytes_to_read > 0) {
