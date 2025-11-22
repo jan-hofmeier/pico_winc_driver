@@ -7,6 +7,7 @@
 #include "winc1500_registers.h"
 #include "winc_simulator_app.h"
 #include "pio_spi.h"
+#include "winc_dma.h"
 
 #define MAX_SPI_PACKET_SIZE 8192
 
@@ -68,22 +69,19 @@ void spi_receive_data_and_crc(uint8_t *data, uint32_t size) {
     spi_read_dummy_crc_if_needed_on_write();
 }
 
-void winc_spi_interrupt_handler(void) {
-    uint8_t command = 0;
-    uint8_t cmd_buf[12]; // Increased buffer size for safety
+static uint8_t pending_command = 0;
+static uint8_t pending_cmd_buf[16];
+
+void winc_process_command() {
+    uint8_t *cmd_buf = pending_cmd_buf;
+    uint8_t command = pending_command;
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
-    
-    // Wait for the command byte
-    do {
-        pio_spi_read_blocking(&command, 1); // Read into 'command'
-    } while(!command); // ignore zero bytes. 
 
     response_buf[0] = command; // Prepend command to response buffer
 
     switch(command) {
         case CMD_SINGLE_READ: {
-            // Read 3-byte address and 1 byte crc
-            pio_spi_read_blocking(cmd_buf + 1, crc_off ? 3 : 4);
+            // Address and CRC already read into cmd_buf[1]...
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint8_t *mem_ptr = get_memory_ptr(addr, 4);
 
@@ -116,8 +114,7 @@ void winc_spi_interrupt_handler(void) {
             break;
         }
         case CMD_SINGLE_WRITE: {
-            // Read 3-byte address and 4-byte data and 1 byte crc
-            pio_spi_read_blocking(cmd_buf + 1, crc_off ? 7 : 8);
+            // Data is in cmd_buf[4]...[7]
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
 
@@ -145,8 +142,7 @@ void winc_spi_interrupt_handler(void) {
             break;
         }
         case CMD_INTERNAL_READ: {
-            // Read 2-byte address and 1 byte dummy and 1 byte crc
-            pio_spi_read_blocking(cmd_buf + 1, crc_off ? 3 : 4);
+            // Address in cmd_buf[1]..[2]
             uint32_t addr = (cmd_buf[1] << 8) | cmd_buf[2];
             if(cmd_buf[1] & 0x80) addr &= ~0x8000;
 
@@ -167,8 +163,7 @@ void winc_spi_interrupt_handler(void) {
             break;
         }
         case CMD_INTERNAL_WRITE: {
-            // Read 2-byte address and 4-byte data and 1 byte crc
-            pio_spi_read_blocking(cmd_buf + 1, crc_off ? 6 : 7);
+            // Address cmd_buf[1]..[2], Data cmd_buf[3]..[6]
             uint32_t addr = (cmd_buf[1] << 8) | (cmd_buf[2]);
             if(cmd_buf[1] & 0x80) addr &= ~0x8000;
             uint32_t data_val = (cmd_buf[3] << 24) | (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
@@ -195,10 +190,6 @@ void winc_spi_interrupt_handler(void) {
         }
         case CMD_DMA_READ:
         case CMD_DMA_EXT_READ: {
-            // Read 3-byte address and 2-byte size (for CMD_DMA_READ) or 3-byte size (for CMD_DMA_EXT_READ)
-            uint8_t addr_size_bytes = (command == CMD_DMA_READ) ? (crc_off ? 5 : 6) : (crc_off ? 6 : 7);
-            pio_spi_read_blocking(cmd_buf + 1, addr_size_bytes);
-
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t total_size;
             if (command == CMD_DMA_READ) {
@@ -240,10 +231,6 @@ void winc_spi_interrupt_handler(void) {
         }
         case CMD_DMA_WRITE:
         case CMD_DMA_EXT_WRITE: {
-            // Read 3-byte address and 2-byte size (for CMD_DMA_WRITE) or 3-byte size (for CMD_DMA_EXT_WRITE)
-            uint8_t addr_size_bytes = (command == CMD_DMA_WRITE) ? (crc_off ? 5 : 6) : (crc_off ? 6 : 7);
-            pio_spi_read_blocking(cmd_buf + 1, addr_size_bytes);
-
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t total_size;
             if (command == CMD_DMA_WRITE) {
@@ -264,8 +251,6 @@ void winc_spi_interrupt_handler(void) {
 
                 if ((prefix_byte & 0xF0) != 0xF0) {
                     SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unexpected DMA prefix", prefix_byte, 0);
-                    // The host driver seems to continue even if the prefix is wrong.
-                    // We will do the same and just log it.
                 }
 
                 uint32_t chunk_size = (remaining_size > MAX_SPI_PACKET_SIZE) ? MAX_SPI_PACKET_SIZE : remaining_size;
@@ -313,17 +298,80 @@ void winc_spi_interrupt_handler(void) {
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             break;
         }
-        // TODO: Implement other commands (DMA, RESET, etc.)
         default: {
-            // For unknown commands, just consume a few bytes to prevent bus errors
-            // and respond with a dummy status.
-            uint32_t dummy;
-            pio_spi_read_blocking((uint8_t*)&dummy, 8);
+            // Consume remaining bytes if any were expected but not read
+            // Actually for unknown command we don't know length, so we assume 0 additional bytes
+            // But in original code we read 8 bytes dummy.
+            // Since we are here after reading just the command byte, we might want to read dummy bytes?
+            // But we can't really know how many.
+            // Let's just send error response.
             response_buf[1] = 0xFF; // Error status
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
-            SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unknown Command", command, dummy);
+            SIM_LOG(SIM_LOG_TYPE_COMMAND, "Unknown Command", command, 0);
             break;
         }
+    }
+}
+
+void winc_dma_complete_callback(void) {
+    winc_process_command();
+    // Re-enable RX IRQ
+    pio_spi_set_rx_irq_enabled(true);
+}
+
+void winc_spi_interrupt_handler(void) {
+    uint8_t command = 0;
+
+    // Wait for the command byte
+    // Using blocking read here is fine because the interrupt triggered meaning there is data
+    // But we should be careful if it's a spurious interrupt?
+    // The original code had a loop.
+
+    // Read 1 byte
+    pio_spi_read_blocking(&command, 1);
+    if (command == 0) return; // Should not happen if IRQ triggered correctly, but safety check.
+
+    pending_command = command;
+    size_t bytes_to_read = 0;
+
+    switch(command) {
+        case CMD_SINGLE_READ:
+            bytes_to_read = crc_off ? 3 : 4;
+            break;
+        case CMD_SINGLE_WRITE:
+            bytes_to_read = crc_off ? 7 : 8;
+            break;
+        case CMD_INTERNAL_READ:
+            bytes_to_read = crc_off ? 3 : 4;
+            break;
+        case CMD_INTERNAL_WRITE:
+            bytes_to_read = crc_off ? 6 : 7;
+            break;
+        case CMD_DMA_READ:
+        case CMD_DMA_WRITE:
+            bytes_to_read = crc_off ? 5 : 6;
+            break;
+        case CMD_DMA_EXT_READ:
+        case CMD_DMA_EXT_WRITE:
+            bytes_to_read = crc_off ? 6 : 7;
+            break;
+        case CMD_RESET:
+            bytes_to_read = 0;
+            break;
+        default:
+            // Unknown command, maybe read some dummy bytes?
+            // Original code read 8 bytes.
+            bytes_to_read = 8;
+            break;
+    }
+
+    if (bytes_to_read > 0) {
+        // Disable RX IRQ to prevent re-entry during DMA
+        pio_spi_set_rx_irq_enabled(false);
+        winc_dma_read(pending_cmd_buf + 1, bytes_to_read);
+    } else {
+        // No more bytes to read, process immediately
+        winc_process_command();
     }
 }
 
@@ -362,6 +410,7 @@ int winc_simulator_app_main() {
     uint32_t rev_reg = 0x1330134a;
     memcpy(get_memory_ptr(NMI_REV_REG, 4), &rev_reg, sizeof(rev_reg));
 
+    winc_dma_init(winc_dma_complete_callback);
     pio_spi_slave_init(winc_spi_interrupt_handler);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");

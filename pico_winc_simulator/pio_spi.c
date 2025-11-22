@@ -158,3 +158,15 @@ void pio_spi_slave_init(irq_handler_t handler) {
     irq_set_enabled(PIO0_IRQ_0, true);
     pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true);
 }
+
+uint pio_spi_get_rx_dreq(void) {
+    return pio_get_dreq(pio, sm_rx, false);
+}
+
+volatile void* pio_spi_get_rx_fifo_address(void) {
+    return &pio->rxf[sm_rx];
+}
+
+void pio_spi_set_rx_irq_enabled(bool enabled) {
+    pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), enabled);
+}
