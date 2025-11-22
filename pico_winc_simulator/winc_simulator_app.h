@@ -1,7 +1,7 @@
 #ifndef WINC_SIMULATOR_APP_H
 #define WINC_SIMULATOR_APP_H
 
-#include <stdio.h> // Required for printf
+#include "pico/stdlib.h"
 #include "sim_log.h"
 
 // Define WINC memory size
@@ -31,5 +31,6 @@ extern uint8_t simulator_response_buffer[4];
 extern uint8_t simulator_response_index;
 
 int winc_simulator_app_main(void);
+void winc_spi_interrupt_handler(void);
 
 #endif // WINC_SIMULATOR_APP_H

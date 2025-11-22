@@ -1,5 +1,6 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
+#include "hardware/irq.h"
 #include "spi_slave.pio.h"
 #include "pio_spi.h"
 
@@ -13,6 +14,9 @@ static PIO pio = pio0;
 static uint sm_rx;
 static uint sm_tx;
 static uint sm_oe;
+static irq_handler_t app_irq_handler = NULL;
+
+static void pio_spi_irq();
 
 // --- WRITE (TX) ---
 // Send a byte to the Master.
@@ -38,7 +42,18 @@ size_t pio_spi_read_blocking(uint8_t* buffer, size_t len) {
     return len;
 }
 
-void pio_spi_slave_init() {
+uint8_t pio_spi_get_non_zero_byte(void) {
+    while (!pio_sm_is_rx_fifo_empty(pio, sm_rx)) {
+        uint8_t received_byte = (uint8_t)pio_sm_get(pio, sm_rx);
+        if (received_byte != 0) {
+            return received_byte;
+        }
+    }
+    return 0; // FIFO empty or only contained zero bytes
+}
+
+void pio_spi_slave_init(irq_handler_t handler) {
+    app_irq_handler = handler;
     sm_rx = pio_claim_unused_sm(pio, true);
     sm_tx = pio_claim_unused_sm(pio, true);
     sm_oe = pio_claim_unused_sm(pio, true);
@@ -147,4 +162,22 @@ void pio_spi_slave_init() {
     
     pio_sm_init(pio, sm_tx, start_offset, &c_tx);
     pio_sm_set_enabled(pio, sm_tx, true);
+
+    // --- Interrupt Setup ---
+    irq_set_exclusive_handler(PIO0_IRQ_0, app_irq_handler);
+    irq_set_enabled(PIO0_IRQ_0, true);
+    pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true);
 }
+
+uint pio_spi_get_rx_dreq(void) {
+    return pio_get_dreq(pio, sm_rx, false);
+}
+
+volatile const void* pio_spi_get_rx_fifo_address(void) {
+    return &pio->rxf[sm_rx];
+}
+
+void pio_spi_set_rx_irq_enabled(bool enabled) {
+    pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), enabled);
+}
+

@@ -122,6 +122,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         pico_winc_simulator/winc_simulator_app.c
         pico_winc_simulator/pio_spi.c
         pico_winc_simulator/sim_log.c
+        pico_winc_simulator/winc_dma.c
     )
     pico_generate_pio_header(pico_winc_simulator ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
     target_include_directories(pico_winc_simulator PUBLIC
@@ -130,7 +131,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         config
         ${PICO_SDK_PATH}/src/rp2_common/hardware_spi/include
     )
-    target_link_libraries(pico_winc_simulator pico_stdlib hardware_spi hardware_gpio hardware_pio)
+    target_link_libraries(pico_winc_simulator pico_stdlib hardware_spi hardware_gpio hardware_pio hardware_dma)
     pico_enable_stdio_usb(pico_winc_simulator 1)
     pico_enable_stdio_uart(pico_winc_simulator 0)
     pico_add_extra_outputs(pico_winc_simulator)
@@ -142,6 +143,7 @@ elseif(BUILD_MODE STREQUAL "COMBINED")
         pico_winc_simulator/winc_simulator_app.c
         pico_winc_simulator/pio_spi.c
         pico_winc_simulator/sim_log.c
+        pico_winc_simulator/winc_dma.c
         ${WINC_DRIVER_SOURCES}
     )
     pico_generate_pio_header(pico_winc_combined ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
@@ -152,7 +154,7 @@ elseif(BUILD_MODE STREQUAL "COMBINED")
         ${WINC_DRIVER_INCLUDES}
         ${PICO_SDK_PATH}/src/rp2_common/hardware_spi/include
     )
-    target_link_libraries(pico_winc_combined pico_stdlib hardware_spi hardware_gpio pico_multicore hardware_pio)
+    target_link_libraries(pico_winc_combined pico_stdlib hardware_spi hardware_gpio pico_multicore hardware_pio hardware_dma)
     pico_enable_stdio_usb(pico_winc_combined 1)
     pico_enable_stdio_uart(pico_winc_combined 1)
     target_compile_definitions(pico_winc_combined PUBLIC PICO_WINC COMBINED_BUILD)
