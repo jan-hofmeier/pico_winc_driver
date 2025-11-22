@@ -2,12 +2,13 @@
 #include "pico/stdlib.h"
 #include <string.h>
 
-#include "conf_winc.h"
+#include "../config/conf_winc.h"
 #include "m2m_wifi.h"
 #include "socket.h"
 #include "m2m_types.h"
 #include "iot/http/http_client.h" // New include for HTTP client
 #include "wifi_credentials.h"
+#include "winc_driver_app.h"
 
 #define MAIN_HTTP_CLIENT_URL "httpbin.org"
 #define MAIN_HTTP_CLIENT_PATH "/anything"
@@ -160,7 +161,7 @@ static void wrapped_socket_resolve_handler(uint8_t *doamin_name, uint32_t server
     http_client_socket_resolve_handler(doamin_name, server_ip);
 }
 
-int main()
+int winc_driver_app_main()
 {
     stdio_init_all();
     sleep_ms(2000); // Increased sleep for serial capture

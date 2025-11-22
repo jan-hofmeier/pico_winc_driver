@@ -2,6 +2,7 @@
 set -e
 mkdir -p build
 cd build
-make
-picotool load -F pico_winc_driver.uf2
+cmake .. -DBUILD_MODE=COMBINED
+make pico_winc_combined
+picotool load -F pico_winc_combined.uf2
 picotool reboot

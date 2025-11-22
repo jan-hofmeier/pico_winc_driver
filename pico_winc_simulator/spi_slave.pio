@@ -1,0 +1,67 @@
+// --------------------------------------------------
+// RX Program
+// --------------------------------------------------
+.program spi_rx
+wait_cs:
+    wait 0 pin 1            ; Wait CS (17) Low
+.wrap_target
+    set x, 7
+bit_loop:
+    wait 0 pin 2            ; SCK (18) Low
+    wait 1 pin 2            ; SCK (18) High
+    jmp pin wait_cs         ; Abort Check (CS=17)
+    in pins, 1              ; Sample MOSI (16)
+    jmp x-- bit_loop
+    push noblock
+.wrap
+
+// --------------------------------------------------
+// TX Program (Sticky OSR + Bit Precision)
+// --------------------------------------------------
+.program spi_tx
+// Requirement: X = 0
+
+// 1. Abort Handler
+abort_reset:
+    mov y, osr
+    wait 0 pin 1            ; Wait for NEXT transaction (CS Low)
+    jmp !y first_pull       ; pull if we don't already have valid data 
+    // 1. Reset the counter (Start of new byte)
+    set y, 7
+    
+    // 2. SKIP THE 'OUT'! 
+    // The MISO pin is already holding the correct bit (from before the abort).
+    // We jump straight to waiting for the Master to read it.
+// 2. Normal Loop
+.wrap_target  
+    wait 1 pin 2            ; Wait SCK Rise (Master Reads)    
+    jmp pin abort_reset     ; Abort Check  
+    wait 0 pin 2            ; Wait SCK Fall
+    jmp y-- bit_loop
+public first_pull:
+    pull noblock            ; Load next byte
+    set y, 7                ; Reset Bit Counter
+bit_loop:
+    out pins, 1             ; Output Next Bit  
+.wrap
+
+
+// --------------------------------------------------
+// 3. Tristate Control Program (Side-Set Optimized)
+// --------------------------------------------------
+.program spi_tristate
+.side_set 1 pindirs
+
+// Config: 
+// - IN Base: CS (17)
+// - SIDESET Base: MISO (19)
+
+.wrap_target
+    // Wait for CS(0) to be Low.
+    // side 0: Force MISO to Input (Hi-Z) continuously while waiting.
+    wait 0 pin 0        side 0
+
+    // Wait for CS(0) to be High.
+    // side 1: Force MISO to Output (Drive) continuously while active.
+    wait 1 pin 0        side 1
+.wrap

@@ -12,6 +12,11 @@ This document describes the SPI protocol used to communicate with the WINC1500 W
 
 All SPI transactions consist of a command phase and a data phase. The host initiates a transaction by asserting the CS line, sending a command, and then sending or receiving data.
 
+**Packet Order Prefix (0xFx):** For multi-packet transfers, a 0xFx prefix is used to indicate the packet order:
+*   `0xF1`: First packet in a multi-packet transfer.
+*   `0xF2`: Continued packet in a multi-packet transfer.
+*   `0xF3`: Last packet in a multi-packet transfer, or a single-packet transfer.
+
 ### Command Phase
 
 The command phase is a variable-length sequence of bytes that specifies the operation to be performed. The first byte is always the command byte, which has the following format:
@@ -46,7 +51,7 @@ The following table lists the available SPI commands:
 
 ## Command Formats
 
-### `CMD_SINGLE_READ`
+### `CMD_SINGLE_READ (0xca)`
 
 This command is used to read a single word from a register.
 
@@ -54,7 +59,7 @@ This command is used to read a single word from a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_READ`  |
+| 0     | `CMD_SINGLE_READ (0xca)`  |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -63,13 +68,15 @@ This command is used to read a single word from a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_READ`  |
-| 1     | Data[7:0]          |
-| 2     | Data[15:8]         |
-| 3     | Data[23:16]        |
-| 4     | Data[31:24]        |
+| 0     | `CMD_SINGLE_READ (0xca)`  |
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3     | Data[7:0]          |
+| 4     | Data[15:8]         |
+| 5     | Data[23:16]        |
+| 6     | Data[31:24]        |
 
-### `CMD_INTERNAL_WRITE`
+### `CMD_INTERNAL_WRITE (0xc3)`
 
 This command is used to write to an internal register.
 
@@ -77,7 +84,7 @@ This command is used to write to an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_WRITE`|
+| 0     | `CMD_INTERNAL_WRITE (0xc3)`|
 | 1     | Address[15:8]      |
 | 2     | Address[7:0]       |
 | 3     | Data[7:0]          |
@@ -92,7 +99,7 @@ This command is used to write to an internal register.
 | 0     | `CMD_INTERNAL_WRITE`|
 | 1     | Status             |
 
-### `CMD_RESET`
+### `CMD_RESET (0xcf)`
 
 This command is used to reset the WINC1500.
 
@@ -100,7 +107,7 @@ This command is used to reset the WINC1500.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_RESET`        |
+| 0     | `CMD_RESET (0xcf)`        |
 
 **Response:**
 
@@ -109,7 +116,7 @@ This command is used to reset the WINC1500.
 | 0     | `CMD_RESET`        |
 | 1     | Status             |
 
-### `CMD_SINGLE_WRITE`
+### `CMD_SINGLE_WRITE (0xc9)`
 
 This command is used to write a single word to a register.
 
@@ -117,7 +124,7 @@ This command is used to write a single word to a register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_SINGLE_WRITE` |
+| 0     | `CMD_SINGLE_WRITE (0xc9)` |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -133,7 +140,7 @@ This command is used to write a single word to a register.
 | 0     | `CMD_SINGLE_WRITE` |
 | 1     | Status             |
 
-### `CMD_INTERNAL_READ`
+### `CMD_INTERNAL_READ (0xc4)`
 
 This command is used to read from an internal register.
 
@@ -141,7 +148,7 @@ This command is used to read from an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_READ`|
+| 0     | `CMD_INTERNAL_READ (0xc4)`|
 | 1     | Address[15:8]      |
 | 2     | Address[7:0]       |
 
@@ -149,13 +156,15 @@ This command is used to read from an internal register.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_INTERNAL_READ`|
-| 1     | Data[7:0]          |
-| 2     | Data[15:8]         |
-| 3     | Data[23:16]        |
-| 4     | Data[31:24]        |
+| 0     | `CMD_INTERNAL_READ (0xc4)`|
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3     | Data[7:0]          |
+| 4     | Data[15:8]         |
+| 5     | Data[23:16]        |
+| 6     | Data[31:24]        |
 
-### `CMD_DMA_EXT_READ`
+### `CMD_DMA_EXT_READ (0xc8)`
 
 This command is used to read a block of data from memory using extended DMA.
 
@@ -163,7 +172,7 @@ This command is used to read a block of data from memory using extended DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_EXT_READ` |
+| 0     | `CMD_DMA_EXT_READ (0xc8)` |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -176,9 +185,11 @@ This command is used to read a block of data from memory using extended DMA.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_DMA_EXT_READ` |
-| 1..n  | Data               |
+| 1     | Status (0x00)      |
+| 2     | `0xFx` (Prefix)    |
+| 3..n  | Data               |
 
-### `CMD_DMA_EXT_WRITE`
+### `CMD_DMA_EXT_WRITE (0xc7)`
 
 This command is used to write a block of data to memory using extended DMA.
 
@@ -186,7 +197,7 @@ This command is used to write a block of data to memory using extended DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_EXT_WRITE`|
+| 0     | `CMD_DMA_EXT_WRITE (0xc7)`|
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -196,7 +207,10 @@ This command is used to write a block of data to memory using extended DMA.
 
 **Data:**
 
-A block of data of the specified size.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `0xFx` (Prefix)    |
+| 1..n  | A block of data of the specified size. |
 
 **Response:**
 
@@ -205,7 +219,7 @@ A block of data of the specified size.
 | 0     | `CMD_DMA_EXT_WRITE`|
 | 1     | Status             |
 
-### `CMD_DMA_READ`
+### `CMD_DMA_READ (0xc2)`
 
 This command is used to read a block of data from memory using DMA.
 
@@ -213,7 +227,7 @@ This command is used to read a block of data from memory using DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_READ`     |
+| 0     | `CMD_DMA_READ (0xc2)`     |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -225,9 +239,11 @@ This command is used to read a block of data from memory using DMA.
 | Byte  | Description        |
 |-------|--------------------|
 | 0     | `CMD_DMA_READ`     |
-| 1..n  | Data               |
+| 1     | Status (0x00)      |
+| 2     | `0xF3` (Prefix)    |
+| 3..n  | Data               |
 
-### `CMD_DMA_WRITE`
+### `CMD_DMA_WRITE (0xc1)`
 
 This command is used to write a block of data to memory using DMA.
 
@@ -235,7 +251,7 @@ This command is used to write a block of data to memory using DMA.
 
 | Byte  | Description        |
 |-------|--------------------|
-| 0     | `CMD_DMA_WRITE`    |
+| 0     | `CMD_DMA_WRITE (0xc1)`    |
 | 1     | Address[23:16]     |
 | 2     | Address[15:8]      |
 | 3     | Address[7:0]       |
@@ -244,7 +260,10 @@ This command is used to write a block of data to memory using DMA.
 
 **Data:**
 
-A block of data of the specified size.
+| Byte  | Description        |
+|-------|--------------------|
+| 0     | `0xF3` (Prefix)    |
+| 1..n  | A block of data of the specified size. |
 
 **Response:**
 
@@ -257,9 +276,9 @@ A block of data of the specified size.
 
 After sending a command, the host must read the SPI bus to receive a response from the WINC1500. The first byte of the response is always an echo of the command that was sent.
 
-For write commands, the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error.
+For all read commands (`CMD_SINGLE_READ`, `CMD_INTERNAL_READ`, `CMD_DMA_READ`, `CMD_DMA_EXT_READ`), the second byte of the response is a status byte (`0x00`), followed by a `0xFx` prefix, and then the requested data.
 
-For read commands, the second byte of the response is the first byte of the requested data.
+For write commands (`CMD_SINGLE_WRITE`, `CMD_INTERNAL_WRITE`, `CMD_DMA_WRITE`, `CMD_DMA_EXT_WRITE`), the second byte of the response is a status byte that indicates whether the command was successful. A value of `0x00` indicates success, while any other value indicates an error. Note that for DMA write commands, the host is expected to send a `0xFx` prefix before the actual data.
 
 ## Interrupt Handling
 
@@ -395,6 +414,69 @@ This command is used to send data on a socket.
 | `Socket`   | `uint8` | The socket to send data on.                       |
 | `Data`     | `char[]`| The data to send.                                 |
 | `Length`   | `uint16`| The length of the data to send.                   |
+
+### HIF Responses
+
+#### `M2M_WIFI_RESP_CON_STATE_CHANGED`
+
+This response is sent when the Wi-Fi connection state changes.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `State`    | `uint8` | The new connection state. See `tenuM2mConnState`. |
+| `Error`    | `uint8` | An error code if the connection failed.           |
+
+#### `M2M_WIFI_RESP_SCAN_RESULT`
+
+This response is sent for each AP found during a scan.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Index`    | `uint8` | The index of the AP in the scan results.          |
+| `RSSI`     | `sint8` | The signal strength of the AP.                    |
+| `Auth_Type`| `uint8` | The authentication type of the AP.                |
+| `Channel`  | `uint8` | The channel of the AP.                            |
+| `BSSID`    | `uint8[6]`| The MAC address of the AP.                        |
+| `SSID`     | `char[]`| The SSID of the AP.                               |
+
+#### `SOCKET_MSG_BIND`
+
+This response is sent in response to a `SOCKET_CMD_BIND` command.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Status`   | `sint8` | The status of the bind operation.                 |
+
+#### `SOCKET_MSG_CONNECT`
+
+This response is sent in response to a `SOCKET_CMD_CONNECT` command.
+
+**Payload:**
+
+| Field      | Type    | Description                                       |
+|------------|---------|---------------------------------------------------|
+| `Socket`   | `uint8` | The socket that was connected.                    |
+| `Error`    | `sint8` | An error code if the connection failed.           |
+
+#### `SOCKET_MSG_RECV` / `SOCKET_MSG_RECVFROM`
+
+This response is sent when data is received on a socket.
+
+**Payload:**
+
+| Field              | Type      | Description                                       |
+|--------------------|-----------|---------------------------------------------------|
+| `Buffer`           | `char[]`  | The received data.                                |
+| `Buffer_Size`      | `sint16`  | The size of the received data.                    |
+| `Remaining_Size`   | `uint16`  | The amount of data remaining in the socket buffer.|
+| `Remote_Address`   | `struct sockaddr_in` | The address of the sender.                      |
+
 
 ## HIF Transaction Flow
 
