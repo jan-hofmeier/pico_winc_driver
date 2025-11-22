@@ -9,6 +9,9 @@
 #include "pio_spi.h"
 #include "winc_dma.h"
 #include "winc_callback_manager.h"
+#include "winc_hif.h"
+#include "sim_log.h"
+
 
 #define MAX_SPI_PACKET_SIZE 8192
 
@@ -23,6 +26,10 @@ uint8_t bootrom_regs[256];
 // CRC state
 bool crc_off = false;
 bool reset_triggered = false;
+bool reset_in_progress = false;
+
+// Special DMA address storage, mimicking a hardware register
+static uint32_t dma_addr_storage = 0x20000; 
 
 // Function to get a pointer to the correct memory location, with OOB checks
 uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {
@@ -34,6 +41,8 @@ uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {
         return &spi_regs[addr - 0xe800];
     } else if (addr >= 0xc0000 && (addr + size) <= 0xc0100) { // bootrom_regs
         return &bootrom_regs[addr - 0xc0000];
+    } else if (addr == 0x150400) { // Special DMA address register
+        return (uint8_t*)&dma_addr_storage;
     } else if ((addr + size) <= WINC_MEM_SIZE) { // winc_memory
         return &winc_memory[addr];
     }
@@ -91,13 +100,13 @@ void winc_process_command() {
             }
 
             if (addr == NMI_STATE_REG && reset_triggered) {
-                uint32_t state_reg = 0x02532636;
+                uint32_t state_reg = 0x1234; // Firmware start value
                 // Send command echo, status byte, and 0xF3 prefix
                 uint8_t single_read_prefix[3] = {command, 0x00, 0xF3};
                 pio_spi_write_blocking(single_read_prefix, 3);
                 // Send data
                 spi_send_data_with_crc((uint8_t*)&state_reg, 4);
-                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ (reset)", addr, state_reg);
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ (firmware start)", addr, state_reg);
                 reset_triggered = false; // Clear the flag
                 break;
             }
@@ -109,6 +118,16 @@ void winc_process_command() {
             // Send data
             spi_send_data_with_crc(mem_ptr, 4);
 
+            if (addr == WIFI_HOST_RCV_CTRL_2) {
+                // Clear the bit that the host polls
+                uint32_t reg_val;
+                memcpy(&reg_val, mem_ptr, 4);
+                if (reg_val & 0x2) {
+                    reg_val &= ~0x2;
+                    memcpy(mem_ptr, &reg_val, 4);
+                }
+            }
+
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_READ", addr, *(uint32_t*)(mem_ptr));
             break;
         }
@@ -117,15 +136,26 @@ void winc_process_command() {
             uint32_t addr = (cmd_buf[1] << 16) | (cmd_buf[2] << 8) | cmd_buf[3];
             uint32_t data_val = (cmd_buf[4] << 24) | (cmd_buf[5] << 16) | (cmd_buf[6] << 8) | cmd_buf[7];
 
-            if (addr == CHIPID) {
+            if (addr == NMI_GLB_RESET_0) {
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "GLB_RESET", addr, data_val);
+                if (data_val == 0) {
+                    reset_in_progress = true;
+                } else if (reset_in_progress && data_val == 1) {
+                    reset_triggered = true;
+                    reset_in_progress = false;
+                }
+            } else if (addr == NMI_SPI_PROTOCOL_CONFIG) {
+                reset_triggered = true; // Use this as the reset trigger
+            } else if (addr == CHIPID) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "Software Reset", 0, 0);
                 reset_triggered = true;
                 // Don't actually write to CHIPID
                 response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SINGLE_WRITE", addr, data_val); // Log after response
                 break;
             }
-            
+
             uint8_t *mem_ptr = get_memory_ptr(addr, 4);
             if(mem_ptr == NULL) {
                 response_buf[1] = 0xFF; // Respond with status byte (error)
@@ -412,6 +442,7 @@ int winc_simulator_app_main() {
     winc_dma_init(winc_dma_complete_callback);
     winc_creg_init();
     sim_log_init();
+    winc_hif_init();
     pio_spi_slave_init(winc_spi_interrupt_handler);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
