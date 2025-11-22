@@ -123,6 +123,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         pico_winc_simulator/pio_spi.c
         pico_winc_simulator/sim_log.c
         pico_winc_simulator/winc_dma.c
+        pico_winc_simulator/winc_callback_manager.c
     )
     pico_generate_pio_header(pico_winc_simulator ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
     target_include_directories(pico_winc_simulator PUBLIC
@@ -144,6 +145,7 @@ elseif(BUILD_MODE STREQUAL "COMBINED")
         pico_winc_simulator/pio_spi.c
         pico_winc_simulator/sim_log.c
         pico_winc_simulator/winc_dma.c
+        pico_winc_simulator/winc_callback_manager.c
         ${WINC_DRIVER_SOURCES}
     )
     pico_generate_pio_header(pico_winc_combined ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)

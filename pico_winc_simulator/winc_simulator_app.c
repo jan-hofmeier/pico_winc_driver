@@ -320,7 +320,7 @@ void winc_dma_complete_callback(void) {
 }
 
 void winc_spi_interrupt_handler(void) {
-    uint8_t command = pio_spi_get_non_zero_byte_from_rx_fifo();
+    uint8_t command = pio_spi_get_non_zero_byte();
     if (command == 0) return; // Host might be still reading the response
 
     cmd_buf[0] = command;
@@ -411,6 +411,7 @@ int winc_simulator_app_main() {
 
     winc_dma_init(winc_dma_complete_callback);
     winc_creg_init();
+    sim_log_init();
     pio_spi_slave_init(winc_spi_interrupt_handler);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
@@ -418,6 +419,7 @@ int winc_simulator_app_main() {
     // We will now be interrupt driven. The main loop can process queued requests.
     while (true) {
         winc_creg_process_requests();
+        sim_log_process_all_messages();
         __wfi(); // Wait for next interrupt
     }
 

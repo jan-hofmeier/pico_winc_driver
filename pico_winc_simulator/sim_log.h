@@ -15,7 +15,8 @@ typedef enum {
     SIM_LOG_TYPE_ADDRESS,
     SIM_LOG_TYPE_DATA,
     SIM_LOG_TYPE_UNKNOWN_COMMAND,
-    SIM_LOG_TYPE_ADDRESS_DATA // New type for logging address and data
+    SIM_LOG_TYPE_ADDRESS_DATA, // New type for logging address and data
+    SIM_LOG_TYPE_ERROR
 } sim_log_type_t;
 
 typedef struct {
@@ -25,22 +26,14 @@ typedef struct {
     uint32_t value2; // New field for second value
 } sim_log_message_t;
 
-typedef struct {
-    sim_log_message_t buffer[SIM_LOG_BUFFER_SIZE];
-    uint32_t head;
-    uint32_t tail;
-    uint32_t count;
-} sim_log_ring_buffer_t;
-
-extern sim_log_ring_buffer_t g_sim_log_buffer;
-
 #if (SIMULATOR_SPI_LOG_ENABLE == 1)
 #define SIM_LOG(type, str, val1, ...) sim_log_enqueue(type, str, val1, ##__VA_ARGS__)
 #else
 #define SIM_LOG(type, str, val1, ...) do {} while(0)
 #endif
 
+void sim_log_init(void);
 void sim_log_enqueue(sim_log_type_t type, const char *message_str, uint32_t value1, uint32_t value2);
-bool sim_log_process_one_message(void);
+void sim_log_process_all_messages(void);
 
 #endif // SIM_LOG_H
