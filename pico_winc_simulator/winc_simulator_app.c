@@ -69,12 +69,10 @@ void spi_receive_data_and_crc(uint8_t *data, uint32_t size) {
     spi_read_dummy_crc_if_needed_on_write();
 }
 
-static uint8_t pending_command = 0;
-static uint8_t pending_cmd_buf[16];
+static uint8_t cmd_buf[16];
 
 void winc_process_command() {
-    uint8_t *cmd_buf = pending_cmd_buf;
-    uint8_t command = pending_command;
+    uint8_t command = cmd_buf[0];
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
 
     response_buf[0] = command; // Prepend command to response buffer
@@ -320,18 +318,10 @@ void winc_dma_complete_callback(void) {
 }
 
 void winc_spi_interrupt_handler(void) {
-    uint8_t command = 0;
+    uint8_t command = pio_spi_get_non_zero_byte();
+    if (command == 0) return; // Host might be still reading the response
 
-    // Wait for the command byte
-    // Using blocking read here is fine because the interrupt triggered meaning there is data
-    // But we should be careful if it's a spurious interrupt?
-    // The original code had a loop.
-
-    // Read 1 byte
-    pio_spi_read_blocking(&command, 1);
-    if (command == 0) return; // Should not happen if IRQ triggered correctly, but safety check.
-
-    pending_command = command;
+    cmd_buf[0] = command;
     size_t bytes_to_read = 0;
     bool has_crc = true;
 
@@ -375,7 +365,7 @@ void winc_spi_interrupt_handler(void) {
     if (bytes_to_read > 0) {
         // Disable RX IRQ to prevent re-entry during DMA
         pio_spi_set_rx_irq_enabled(false);
-        winc_dma_read(pending_cmd_buf + 1, bytes_to_read);
+        winc_dma_read(cmd_buf + 1, bytes_to_read);
     } else {
         // No more bytes to read, process immediately
         winc_process_command();

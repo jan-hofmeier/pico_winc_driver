@@ -36,7 +36,7 @@ void winc_dma_read(uint8_t *buffer, size_t length) {
     uint dreq = pio_spi_get_rx_dreq();
     channel_config_set_dreq(&c, dreq);
 
-    volatile void *read_addr = pio_spi_get_rx_fifo_address();
+    volatile const void *read_addr = pio_spi_get_rx_fifo_address();
 
     dma_channel_configure(
         dma_channel,

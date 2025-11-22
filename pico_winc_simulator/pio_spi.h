@@ -10,7 +10,9 @@ size_t pio_spi_read_blocking(uint8_t* buffer, size_t len);
 
 // New functions for DMA support
 uint pio_spi_get_rx_dreq(void);
-volatile void* pio_spi_get_rx_fifo_address(void);
+volatile const void* pio_spi_get_rx_fifo_address(void);
 void pio_spi_set_rx_irq_enabled(bool enabled);
+
+uint8_t pio_spi_get_non_zero_byte(void);
 
 #endif // PIO_SPI_H

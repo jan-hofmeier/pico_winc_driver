@@ -42,6 +42,16 @@ size_t pio_spi_read_blocking(uint8_t* buffer, size_t len) {
     return len;
 }
 
+uint8_t pio_spi_get_non_zero_byte(void) {
+    while (!pio_sm_is_rx_fifo_empty(pio, sm_rx)) {
+        uint8_t received_byte = (uint8_t)pio_sm_get(pio, sm_rx);
+        if (received_byte != 0) {
+            return received_byte;
+        }
+    }
+    return 0; // FIFO empty or only contained zero bytes
+}
+
 void pio_spi_slave_init(irq_handler_t handler) {
     app_irq_handler = handler;
     sm_rx = pio_claim_unused_sm(pio, true);
@@ -163,10 +173,11 @@ uint pio_spi_get_rx_dreq(void) {
     return pio_get_dreq(pio, sm_rx, false);
 }
 
-volatile void* pio_spi_get_rx_fifo_address(void) {
+volatile const void* pio_spi_get_rx_fifo_address(void) {
     return &pio->rxf[sm_rx];
 }
 
 void pio_spi_set_rx_irq_enabled(bool enabled) {
     pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), enabled);
 }
+
