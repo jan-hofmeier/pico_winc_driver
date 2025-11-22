@@ -8,6 +8,7 @@
 #include "winc_simulator_app.h"
 #include "pio_spi.h"
 #include "winc_dma.h"
+#include "winc_callback_manager.h"
 
 #define MAX_SPI_PACKET_SIZE 8192
 
@@ -131,8 +132,8 @@ void winc_process_command() {
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
                 break;
             }
-            
             memcpy(mem_ptr, &data_val, 4);
+            winc_creg_handle_write(addr);
 
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -173,14 +174,15 @@ void winc_process_command() {
                 }
             }
             
-            uint8_t *mem_ptr = get_memory_ptr(addr, 4);
+            uint8_t* mem_ptr = get_memory_ptr(addr, 4);
             if(mem_ptr == NULL) {
                 response_buf[1] = 0xFF; // Respond with status byte (error)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
                 break;
             }
-            
             memcpy(mem_ptr, &data_val, 4);
+            winc_creg_handle_write(addr);
+            
             response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
             pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
             SIM_LOG(SIM_LOG_TYPE_COMMAND, "INTERNAL_WRITE", addr, data_val);
@@ -318,7 +320,7 @@ void winc_dma_complete_callback(void) {
 }
 
 void winc_spi_interrupt_handler(void) {
-    uint8_t command = pio_spi_get_non_zero_byte();
+    uint8_t command = pio_spi_get_non_zero_byte_from_rx_fifo();
     if (command == 0) return; // Host might be still reading the response
 
     cmd_buf[0] = command;
@@ -408,14 +410,15 @@ int winc_simulator_app_main() {
     memcpy(get_memory_ptr(NMI_REV_REG, 4), &rev_reg, sizeof(rev_reg));
 
     winc_dma_init(winc_dma_complete_callback);
+    winc_creg_init();
     pio_spi_slave_init(winc_spi_interrupt_handler);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
-    // We will now be interrupt driven. The main loop can just sleep.
+    // We will now be interrupt driven. The main loop can process queued requests.
     while (true) {
-        __wfi(); // Wait for interrupt
-        printf("Woke up from interrupt\n");
+        winc_creg_process_requests();
+        __wfi(); // Wait for next interrupt
     }
 
     return 0;

@@ -31,6 +31,11 @@ extern uint8_t simulator_response_buffer[4];
 extern uint8_t simulator_response_index;
 
 int winc_simulator_app_main(void);
+
 void winc_spi_interrupt_handler(void);
+
+uint8_t* get_memory_ptr(uint32_t addr, uint32_t size);
+
+
 
 #endif // WINC_SIMULATOR_APP_H
