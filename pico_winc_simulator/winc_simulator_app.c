@@ -268,9 +268,19 @@ void winc_process_command() {
             } else { // CMD_DMA_EXT_WRITE
                 total_size = (cmd_buf[4] << 16) | (cmd_buf[5] << 8) | cmd_buf[6];
             }
+            
+            uint8_t* mem_ptr = get_memory_ptr(addr, total_size);
+            if(mem_ptr == NULL) {
+                response_buf[1] = 0xFF; // Respond with status byte (error)
+                pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB DMA write", addr, total_size);
+                break;
+            }
+
+            response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
+            pio_spi_write_blocking(response_buf, 2); // Acknowledge command
 
             uint32_t remaining_size = total_size;
-            uint32_t bytes_written = 0;
             bool oob_error = false;
 
             while (remaining_size > 0) {
@@ -284,41 +294,17 @@ void winc_process_command() {
                 }
 
                 uint32_t chunk_size = (remaining_size > MAX_SPI_PACKET_SIZE) ? MAX_SPI_PACKET_SIZE : remaining_size;
-
-                uint8_t* mem_ptr = get_memory_ptr(addr + bytes_written, chunk_size);
-                if (mem_ptr == NULL || oob_error) {
-                    if (!oob_error) { // Log only on the first OOB occurrence
-                        SIM_LOG(SIM_LOG_TYPE_COMMAND, "OOB DMA write", addr + bytes_written, chunk_size);
-                        oob_error = true;
-                    }
-                    // Discard the chunk
-                    uint8_t dummy_buf[256];
-                    uint32_t discard_remaining = chunk_size;
-                    while(discard_remaining > 0) {
-                        uint32_t read_size = (discard_remaining > sizeof(dummy_buf)) ? sizeof(dummy_buf) : discard_remaining;
-                        pio_spi_read_blocking(dummy_buf, read_size);
-                        discard_remaining -= read_size;
-                    }
-                } else {
-                    // Read data into memory
-                    pio_spi_read_blocking(mem_ptr, chunk_size);
-                }
+                // Read data into memory
+                pio_spi_read_blocking(mem_ptr, chunk_size);
 
                 // After every chunk, there is a CRC
                 spi_read_dummy_crc_if_needed_on_write();
                 
                 remaining_size -= chunk_size;
-                bytes_written += chunk_size;
+                mem_ptr += chunk_size;
             }
 
-            // After the loop, send the response
-            if (oob_error) {
-                response_buf[1] = 0xFF; // Error
-            } else {
-                response_buf[1] = 0x00; // Success
-            }
-            pio_spi_write_blocking(response_buf, 2);
-
+            // After the loop, the driver does not expect a response for DMA write.
             SIM_LOG(SIM_LOG_TYPE_COMMAND, (command == CMD_DMA_WRITE) ? "DMA_WRITE" : "DMA_EXT_WRITE", addr, total_size);
             break;
         }
@@ -345,6 +331,8 @@ void winc_process_command() {
 
 void winc_dma_complete_callback(void) {
     winc_process_command();
+    // Flush any remaining bytes from the RX FIFO to prevent sync issues
+    //pio_spi_clear_rx_fifo();
     // Re-enable RX IRQ
     pio_spi_set_rx_irq_enabled(true);
 }
@@ -452,6 +440,7 @@ int winc_simulator_app_main() {
         winc_creg_process_requests();
         sim_log_process_all_messages();
         __wfi(); // Wait for next interrupt
+        printf("[SIMULATOR] Woke up from interrupt\n");
     }
 
     return 0;
