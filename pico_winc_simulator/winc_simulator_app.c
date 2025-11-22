@@ -143,12 +143,19 @@ void winc_process_command() {
                 } else if (reset_in_progress && data_val == 1) {
                     reset_triggered = true;
                     reset_in_progress = false;
+                    crc_off = false;
+                    SIM_LOG(SIM_LOG_TYPE_COMMAND, "SIM: CRC RESET", crc_off, 0);
                 }
             } else if (addr == NMI_SPI_PROTOCOL_CONFIG) {
-                reset_triggered = true; // Use this as the reset trigger
+                if ((data_val & 0xc) == 0) {
+                    crc_off = true;
+                    SIM_LOG(SIM_LOG_TYPE_COMMAND, "SIM: CRC OFF", crc_off, 0);
+                }
             } else if (addr == CHIPID) {
                 SIM_LOG(SIM_LOG_TYPE_COMMAND, "Software Reset", 0, 0);
                 reset_triggered = true;
+                crc_off = false;
+                SIM_LOG(SIM_LOG_TYPE_COMMAND, "SIM: CRC RESET", crc_off, 0);
                 // Don't actually write to CHIPID
                 response_buf[1] = 0x00; // Respond with status byte (0x00 for success)
                 pio_spi_write_blocking(response_buf, 2); // Write command + 1 byte status
@@ -281,7 +288,6 @@ void winc_process_command() {
             pio_spi_write_blocking(response_buf, 2); // Acknowledge command
 
             uint32_t remaining_size = total_size;
-            bool oob_error = false;
 
             while (remaining_size > 0) {
                 uint8_t prefix_byte;
