@@ -154,17 +154,7 @@ void pio_spi_slave_init(irq_handler_t handler) {
     pio_sm_set_enabled(pio, sm_tx, true);
 
     // --- Interrupt Setup ---
-    // Find a free irq
-    // uint8_t pio_irq = pio_get_irq_num(pio, 0);
-    // if (irq_get_exclusive_handler(pio_irq)) {
-    //     pio_irq++;
-    //     if (irq_get_exclusive_handler(pio_irq)) {
-    //         panic("All IRQs are in use");
-    //     }
-    // }
-    irq_set_exclusive_handler(PIO0_IRQ_0, app_irq_handler); // Add a shared IRQ handler
-    irq_set_enabled(PIO0_IRQ_0, true); // Enable the IRQ
-    //const uint irq_index = pio_irq - pio_get_irq_num(pio, 0); // Get index of the IRQ
-    pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true); // Set pio to tell us when the FIFO is NOT empty
-
+    irq_set_exclusive_handler(PIO0_IRQ_0, app_irq_handler);
+    irq_set_enabled(PIO0_IRQ_0, true);
+    pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true);
 }
