@@ -14,5 +14,6 @@ volatile const void* pio_spi_get_rx_fifo_address(void);
 void pio_spi_set_rx_irq_enabled(bool enabled);
 
 uint8_t pio_spi_get_non_zero_byte(void);
+void pio_spi_clear_rx_fifo(void);
 
 #endif // PIO_SPI_H

@@ -52,6 +52,13 @@ uint8_t pio_spi_get_non_zero_byte(void) {
     return 0; // FIFO empty or only contained zero bytes
 }
 
+void pio_spi_clear_rx_fifo(void) {
+    while (!pio_sm_is_rx_fifo_empty(pio, sm_rx)) {
+        (void)pio_sm_get(pio, sm_rx);
+    }
+}
+
+
 void pio_spi_slave_init(irq_handler_t handler) {
     app_irq_handler = handler;
     sm_rx = pio_claim_unused_sm(pio, true);
