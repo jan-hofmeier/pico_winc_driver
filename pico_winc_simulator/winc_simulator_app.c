@@ -2,6 +2,8 @@
 #include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/clocks.h" // Added for set_sys_clock_khz
+#include "hardware/irq.h"
+#include "hardware/sync.h"
 #include "winc1500_registers.h"
 #include "winc_simulator_app.h"
 #include "pio_spi.h"
@@ -66,8 +68,8 @@ void spi_receive_data_and_crc(uint8_t *data, uint32_t size) {
     spi_read_dummy_crc_if_needed_on_write();
 }
 
-void handle_spi_transaction() {
-    uint8_t command;
+void winc_spi_interrupt_handler(void) {
+    uint8_t command = 0;
     uint8_t cmd_buf[12]; // Increased buffer size for safety
     uint8_t response_buf[5]; // Buffer for command echo + 4 bytes data/status
     
@@ -360,18 +362,14 @@ int winc_simulator_app_main() {
     uint32_t rev_reg = 0x1330134a;
     memcpy(get_memory_ptr(NMI_REV_REG, 4), &rev_reg, sizeof(rev_reg));
 
-    pio_spi_slave_init();
+    pio_spi_slave_init(winc_spi_interrupt_handler);
 
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
-    uint32_t transaction_count = 0;
+    // We will now be interrupt driven. The main loop can just sleep.
     while (true) {
-        // The core logic is handled in the handler function which blocks
-        // until a transaction is complete.
-        handle_spi_transaction();
-
-        // The log processing is now handled cooperatively within the SPI bus wrapper.
-        // No need for periodic processing here anymore.
+        __wfi(); // Wait for interrupt
+        printf("Woke up from interrupt\n");
     }
 
     return 0;

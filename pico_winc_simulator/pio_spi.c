@@ -1,5 +1,6 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
+#include "hardware/irq.h"
 #include "spi_slave.pio.h"
 #include "pio_spi.h"
 
@@ -13,6 +14,9 @@ static PIO pio = pio0;
 static uint sm_rx;
 static uint sm_tx;
 static uint sm_oe;
+static irq_handler_t app_irq_handler = NULL;
+
+static void pio_spi_irq();
 
 // --- WRITE (TX) ---
 // Send a byte to the Master.
@@ -38,7 +42,8 @@ size_t pio_spi_read_blocking(uint8_t* buffer, size_t len) {
     return len;
 }
 
-void pio_spi_slave_init() {
+void pio_spi_slave_init(irq_handler_t handler) {
+    app_irq_handler = handler;
     sm_rx = pio_claim_unused_sm(pio, true);
     sm_tx = pio_claim_unused_sm(pio, true);
     sm_oe = pio_claim_unused_sm(pio, true);
@@ -147,4 +152,19 @@ void pio_spi_slave_init() {
     
     pio_sm_init(pio, sm_tx, start_offset, &c_tx);
     pio_sm_set_enabled(pio, sm_tx, true);
+
+    // --- Interrupt Setup ---
+    // Find a free irq
+    uint8_t pio_irq = pio_get_irq_num(pio, 0);
+    if (irq_get_exclusive_handler(pio_irq)) {
+        pio_irq++;
+        if (irq_get_exclusive_handler(pio_irq)) {
+            panic("All IRQs are in use");
+        }
+    }
+    irq_add_shared_handler(pio_irq, app_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY); // Add a shared IRQ handler
+    irq_set_enabled(pio_irq, true); // Enable the IRQ
+    const uint irq_index = pio_irq - pio_get_irq_num(pio, 0); // Get index of the IRQ
+    pio_set_irqn_source_enabled(pio, irq_index, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true); // Set pio to tell us when the FIFO is NOT empty
+
 }
