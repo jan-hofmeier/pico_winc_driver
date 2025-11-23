@@ -97,7 +97,7 @@ static void hif_rx_done_callback(uint32_t address, uint32_t value) {
             uint16_t logical_length = M2M_HIF_HDR_OFFSET + payload_size;
             uint16_t aligned_length = WORD_ALIGN(logical_length);
 
-            winc_hif_send_response(M2M_REQ_GROUP_IP, M2M_WIFI_REQ_DHCP_CONF, aligned_length, (uint8_t*)&ip_config, payload_size);
+            winc_hif_send_response(M2M_REQ_GROUP_WIFI, M2M_WIFI_REQ_DHCP_CONF, aligned_length, (uint8_t*)&ip_config, payload_size);
             
             g_hif_state = HIF_STATE_IDLE;
         }
