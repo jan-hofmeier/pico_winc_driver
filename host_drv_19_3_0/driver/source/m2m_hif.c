@@ -665,7 +665,7 @@ sint8 hif_receive(uint32 u32Addr, uint8 *pu8Buf, uint16 u16Sz, uint8 isDone)
 	if((u32Addr < address)||((u32Addr + u16Sz)>(address+size)))
 	{
 		ret = M2M_ERR_FAIL;
-		M2M_ERR("APP Requested Address beyond the recived buffer address and length\n");
+		M2M_ERR("APP Requested Address %p + %p beyond the recived buffer address %p + %p and length\n", u32Addr, u16Sz, address, size);
 		goto ERR1;
 	}
 	
