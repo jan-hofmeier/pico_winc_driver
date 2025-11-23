@@ -32,6 +32,29 @@ set_property(CACHE BUILD_MODE PROPERTY STRINGS "DRIVER" "SIMULATOR" "COMBINED")
 # initialize the raspberry pi pico sdk
 pico_sdk_init()
 
+set(PICO_TARGET_NAME "")
+if(BUILD_MODE STREQUAL "DRIVER")
+    set(PICO_TARGET_NAME "pico_winc_driver")
+elseif(BUILD_MODE STREQUAL "SIMULATOR")
+    set(PICO_TARGET_NAME "pico_winc_simulator")
+elseif(BUILD_MODE STREQUAL "COMBINED")
+    set(PICO_TARGET_NAME "pico_winc_combined")
+else()
+    message(FATAL_ERROR "Invalid BUILD_MODE selected for flash target: ${BUILD_MODE}")
+endif()
+
+option(PICO_DEVICE_SERIAL "Serial number of the Pico device to flash (optional)" "")
+set(DEVICE_SERIAL_ARG "")
+if (NOT "${PICO_DEVICE_SERIAL}" STREQUAL "")
+    set(DEVICE_SERIAL_ARG "--ser")
+endif()
+
+add_custom_target(flash
+    COMMAND picotool load -F ${PICO_TARGET_NAME}.uf2
+    COMMAND picotool reboot ${DEVICE_SERIAL_ARG} ${PICO_DEVICE_SERIAL} -f
+    DEPENDS ${PICO_TARGET_NAME}
+)
+
 # --- Common sources and includes for the driver ---
 set(WINC_DRIVER_SOURCES)
 set(WINC_DRIVER_INCLUDES)
