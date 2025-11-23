@@ -1,4 +1,6 @@
 build/
+build_driver/
+build_simulator/
 wifi_credentials.h
 conf/wifi_credentials.h
 .vscode
