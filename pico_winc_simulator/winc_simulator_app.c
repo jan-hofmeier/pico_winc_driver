@@ -433,6 +433,12 @@ int winc_simulator_app_main() {
     uint32_t rev_reg = 0x1330134a;
     memcpy(get_memory_ptr(NMI_REV_REG, 4), &rev_reg, sizeof(rev_reg));
 
+
+    // Initialize GPIO22 for interrupt signaling
+    gpio_init(22);
+    gpio_set_dir(22, GPIO_OUT);
+    gpio_put(22, 1); // Default to high (interrupt not asserted)
+
     winc_dma_init(winc_dma_complete_callback);
     winc_creg_init();
     sim_log_init();

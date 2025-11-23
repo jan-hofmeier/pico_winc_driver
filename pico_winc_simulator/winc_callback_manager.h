@@ -35,5 +35,6 @@ void winc_creg_handle_write(uint32_t address);
  * This should be called from the main application loop.
  */
 void winc_creg_process_requests(void);
+void winc_creg_write(uint32_t addr, uint32_t value);
 
 #endif // WINC_CALLBACK_MANAGER_H

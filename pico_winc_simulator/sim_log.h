@@ -6,7 +6,7 @@
 
 // Asynchronous logging buffer
 #define SIM_LOG_BUFFER_SIZE 16
-#define SIM_LOG_MESSAGE_STRING_LEN 28 // Max length for the log string part
+#define SIM_LOG_MESSAGE_STRING_LEN 100 // Max length for the log string part
 
 // Enum to define the type of log message for formatting
 typedef enum {
@@ -16,6 +16,7 @@ typedef enum {
     SIM_LOG_TYPE_DATA,
     SIM_LOG_TYPE_UNKNOWN_COMMAND,
     SIM_LOG_TYPE_ADDRESS_DATA, // New type for logging address and data
+    SIM_LOG_TYPE_INFO, // Added for informational messages
     SIM_LOG_TYPE_ERROR
 } sim_log_type_t;
 

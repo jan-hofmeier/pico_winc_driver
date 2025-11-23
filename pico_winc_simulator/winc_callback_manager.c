@@ -37,6 +37,16 @@ void winc_creg_handle_write(uint32_t address) {
     }
 }
 
+void winc_creg_write(uint32_t addr, uint32_t value) {
+    uint8_t* mem_ptr = get_memory_ptr(addr, 4);
+    if (mem_ptr) {
+        memcpy(mem_ptr, &value, 4);
+        winc_creg_handle_write(addr);
+    } else {
+        SIM_LOG(SIM_LOG_TYPE_ERROR, "Attempt to write to invalid CREG memory region", addr, value);
+    }
+}
+
 void winc_creg_process_requests(void) {
     uint32_t request_address;
     while (queue_try_remove(&creg_queue, &request_address)) {

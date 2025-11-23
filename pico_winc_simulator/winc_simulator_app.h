@@ -35,6 +35,7 @@ int winc_simulator_app_main(void);
 void winc_spi_interrupt_handler(void);
 
 uint8_t* get_memory_ptr(uint32_t addr, uint32_t size);
+void winc_creg_write(uint32_t addr, uint32_t value);
 
 
 
