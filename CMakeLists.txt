@@ -50,8 +50,10 @@ if (NOT "${PICO_DEVICE_SERIAL}" STREQUAL "")
 endif()
 
 add_custom_target(flash
+    COMMAND picotool reboot -u ${DEVICE_SERIAL_ARG} ${PICO_DEVICE_SERIAL} -f
+    COMMAND sleep 5
     COMMAND picotool load -F ${PICO_TARGET_NAME}.uf2
-    COMMAND picotool reboot ${DEVICE_SERIAL_ARG} ${PICO_DEVICE_SERIAL} -f
+    COMMAND picotool reboot -a ${DEVICE_SERIAL_ARG} ${PICO_DEVICE_SERIAL} -f
     DEPENDS ${PICO_TARGET_NAME}
 )
 
