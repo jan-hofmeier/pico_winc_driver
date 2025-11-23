@@ -446,7 +446,7 @@ int winc_simulator_app_main() {
         winc_creg_process_requests();
         sim_log_process_all_messages();
         __wfi(); // Wait for next interrupt
-        printf("[SIMULATOR] Woke up from interrupt\n");
+        //printf("[SIMULATOR] Woke up from interrupt\n");
     }
 
     return 0;
