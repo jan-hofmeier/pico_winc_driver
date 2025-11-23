@@ -131,6 +131,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         src
         pico_winc_simulator
         config
+        ${WINC_DRIVER_INCLUDES}
         ${PICO_SDK_PATH}/src/rp2_common/hardware_spi/include
     )
     target_link_libraries(pico_winc_simulator pico_stdlib hardware_spi hardware_gpio hardware_pio hardware_dma)

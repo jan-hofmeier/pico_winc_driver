@@ -2,7 +2,7 @@
 #define SIM_LOG_H
 
 #include <stdio.h> // Required for printf
-#include "config/conf_simulator.h" // Include for SIMULATOR_SPI_LOG_ENABLE
+#include "conf_simulator.h" // Include for SIMULATOR_SPI_LOG_ENABLE
 
 // Asynchronous logging buffer
 #define SIM_LOG_BUFFER_SIZE 16
