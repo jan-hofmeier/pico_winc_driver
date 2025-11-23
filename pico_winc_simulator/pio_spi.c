@@ -3,6 +3,7 @@
 #include "hardware/irq.h"
 #include "spi_slave.pio.h"
 #include "pio_spi.h"
+#include "conf_simulator.h"
 
 // Define GPIO connections for the SPI slave
 #define MOSI_PIN 16
@@ -174,6 +175,11 @@ void pio_spi_slave_init(irq_handler_t handler) {
     irq_set_exclusive_handler(PIO0_IRQ_0, app_irq_handler);
     irq_set_enabled(PIO0_IRQ_0, true);
     pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), true);
+
+    // Initialize IRQ Pin
+    gpio_init(IRQ_PIN);
+    gpio_set_dir(IRQ_PIN, GPIO_OUT);
+    gpio_put(IRQ_PIN, 0);
 }
 
 uint pio_spi_get_rx_dreq(void) {
@@ -188,3 +194,6 @@ void pio_spi_set_rx_irq_enabled(bool enabled) {
     pio_set_irq0_source_enabled(pio, pio_get_rx_fifo_not_empty_interrupt_source(sm_rx), enabled);
 }
 
+void pio_spi_set_irq_pin(bool assert) {
+    gpio_put(IRQ_PIN, assert ? 1 : 0);
+}

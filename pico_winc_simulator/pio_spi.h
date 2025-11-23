@@ -12,6 +12,7 @@ size_t pio_spi_read_blocking(uint8_t* buffer, size_t len);
 uint pio_spi_get_rx_dreq(void);
 volatile const void* pio_spi_get_rx_fifo_address(void);
 void pio_spi_set_rx_irq_enabled(bool enabled);
+void pio_spi_set_irq_pin(bool assert);
 
 uint8_t pio_spi_get_non_zero_byte(void);
 void pio_spi_clear_rx_fifo(void);
