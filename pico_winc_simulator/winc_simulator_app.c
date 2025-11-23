@@ -29,7 +29,7 @@ bool reset_triggered = false;
 bool reset_in_progress = false;
 
 // Special DMA address storage, mimicking a hardware register
-static uint32_t dma_addr_storage = 0x20000; 
+static uint32_t dma_addr_storage = SHARED_MEM_BASE; 
 
 // Function to get a pointer to the correct memory location, with OOB checks
 uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {

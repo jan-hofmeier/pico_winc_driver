@@ -7,16 +7,11 @@
 #include <string.h> // For memcpy
 #include "hardware/gpio.h"
 
-#define NMI_AHB_SHARE_MEM_BASE 0xd0000
+#define M2M_HIF_HDR_OFFSET (sizeof(tstrHifHdr) + 4)
+#define WORD_ALIGN(val) (((val) & 0x03) ? ((val) + 4 - ((val) & 0x03)) : (val))
+#define SWAP_16(x) ((((x) & 0x00FF) << 8) | (((x) & 0xFF00) >> 8))
 
-
-// A global buffer to hold the HIF response, placed in the simulated shared memory.
-// Max packet size from m2m_hif.h is 1600 - 4 = 1596 bytes.
-// For now, let's make it a reasonable size for a small response like a scan done message.
-// The simulator's get_memory_ptr does not allocate, so we need to ensure this is in the simulator's
-// memory space. For now, this will be handled by the simulator's global memory.
-static uint8_t winc_hif_response_buffer[256]; 
-static uint32_t winc_hif_response_address = NMI_AHB_SHARE_MEM_BASE;
+static uint32_t winc_hif_response_address = SHARED_MEM_BASE;
 
 // The HIF header structure, copied from m2m_hif.h
 typedef struct
@@ -29,37 +24,40 @@ typedef struct
 #define WIFI_HOST_RCV_CTRL_0    (0x1070)
 #define WIFI_HOST_RCV_CTRL_1    (0x1084)
 
+// Macro to byte-swap a 16-bit value
+#define SWAP_16(x) ((((x) & 0x00FF) << 8) | (((x) & 0xFF00) >> 8))
+
 // Function to send a HIF response back to the host
-static void winc_hif_send_response(uint8_t u8Gid, uint8_t u8Opcode, uint16_t u16Length, const uint8_t* payload_ptr) {
+static void winc_hif_send_response(uint8_t u8Gid, uint8_t u8Opcode, uint16_t u16Length, const uint8_t* payload_ptr, uint16_t payload_size) {
     tstrHifHdr header;
     header.u8Gid = u8Gid;
     header.u8Opcode = u8Opcode;
-    header.u16Length = u16Length; // Total length including HIF header
+    header.u16Length = u16Length; // Total word-aligned length
 
-    // Ensure response buffer is large enough
-    if (u16Length > sizeof(winc_hif_response_buffer)) {
-        SIM_LOG(SIM_LOG_TYPE_ERROR, "[HIF] Response too large for buffer.", u16Length, sizeof(winc_hif_response_buffer));
+    // Get a pointer to the shared memory where the response will be placed
+    uint8_t* response_buffer_ptr = get_memory_ptr(winc_hif_response_address, u16Length);
+    if (!response_buffer_ptr) {
+        SIM_LOG(SIM_LOG_TYPE_ERROR, "[HIF] Failed to get memory for response.", winc_hif_response_address, u16Length);
         return;
     }
 
+    // The length field in the header must be big-endian.
+    header.u16Length = SWAP_16(header.u16Length);
+    
     // Copy header
-    memcpy(winc_hif_response_buffer, &header, sizeof(tstrHifHdr));
+    memcpy(response_buffer_ptr, &header, sizeof(tstrHifHdr));
 
-    // Copy payload if exists
-    if (payload_ptr && u16Length > sizeof(tstrHifHdr)) {
-        memcpy(winc_hif_response_buffer + sizeof(tstrHifHdr), payload_ptr, u16Length - sizeof(tstrHifHdr));
+    // Copy payload if exists, at the correct offset
+    if (payload_ptr && payload_size > 0) {
+        memcpy(response_buffer_ptr + M2M_HIF_HDR_OFFSET, payload_ptr, payload_size);
     }
-
-    // Set the response in simulated memory (this is a conceptual step for a simulator)
-    // In a real simulator, this would involve placing the data in a memory region accessible by the host.
-    // For this simple sim, we assume the winc_hif_response_buffer is directly accessible.
     
     // Simulate writing to HIF registers to signal response
     // 1. Write the DMA address of the response to WIFI_HOST_RCV_CTRL_1
     winc_creg_write(WIFI_HOST_RCV_CTRL_1, winc_hif_response_address);
 
     // 2. Write the size and set the interrupt bit in WIFI_HOST_RCV_CTRL_0
-    // (size << 2) | (1 << 0)
+    // The size in this register is the word-aligned bus transfer size.
     uint32_t reg_val = (u16Length << 2) | (1 << 0);
     winc_creg_write(WIFI_HOST_RCV_CTRL_0, reg_val);
 
@@ -73,10 +71,13 @@ static void winc_hif_send_response(uint8_t u8Gid, uint8_t u8Opcode, uint16_t u16
 
 // Callback to de-assert interrupt when host signals RX is done
 static void hif_rx_done_callback(uint32_t address, uint32_t value) {
-    // The host writes to this register to signal it has processed the response.
-    // We can now de-assert the interrupt line.
-    gpio_put(22, 1);
-    SIM_LOG(SIM_LOG_TYPE_INFO, "[HIF] Host signaled RX done. Interrupt de-asserted.", address, value);
+    // Check if the RX Done bit (bit 1) is being set
+    if (value & (1 << 1)) {
+        // The host writes to this register to signal it has processed the response.
+        // We can now de-assert the interrupt line.
+        gpio_put(22, 1);
+        SIM_LOG(SIM_LOG_TYPE_INFO, "[HIF] Host signaled RX done. Interrupt de-asserted.", address, value);
+    }
 }
 
 static void hif_request_callback(uint32_t address, uint32_t value) {
@@ -88,7 +89,7 @@ static void hif_request_callback(uint32_t address, uint32_t value) {
 
     if (hif_packet_ptr) {
         tstrHifHdr* header = (tstrHifHdr*)hif_packet_ptr;
-        uint16_t length = header->u16Length;
+        uint16_t length = SWAP_16(header->u16Length); // Length in header is BE
 
         char log_msg[100];
         snprintf(log_msg, sizeof(log_msg), "[HIF] GID: %u, Opcode: 0x%02X, Length: %u", header->u8Gid, header->u8Opcode, length);
@@ -101,12 +102,13 @@ static void hif_request_callback(uint32_t address, uint32_t value) {
             tstrM2mScanDone scan_done_resp;
             scan_done_resp.u8NumofCh = 0;   // No APs found
             scan_done_resp.s8ScanState = M2M_SUCCESS; // Success
-            // Padding will be handled by memcpy
 
-            // Total length includes HIF header + payload
-            uint16_t total_length = sizeof(tstrHifHdr) + sizeof(tstrM2mScanDone);
+            // Total length includes the full HIF offset + payload size, then aligned.
+            uint16_t payload_size = sizeof(tstrM2mScanDone);
+            uint16_t logical_length = M2M_HIF_HDR_OFFSET + payload_size;
+            uint16_t aligned_length = WORD_ALIGN(logical_length);
             
-            winc_hif_send_response(M2M_REQ_GROUP_WIFI, M2M_WIFI_RESP_SCAN_DONE, total_length, (uint8_t*)&scan_done_resp);
+            winc_hif_send_response(M2M_REQ_GROUP_WIFI, M2M_WIFI_RESP_SCAN_DONE, aligned_length, (uint8_t*)&scan_done_resp, payload_size);
         }
 
     } else {
