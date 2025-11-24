@@ -24,6 +24,7 @@ uint8_t clockless_regs[256];
 uint8_t periph_regs[4096];
 uint8_t spi_regs[256];
 uint8_t bootrom_regs[256];
+uint8_t hif_buffer_region[MAX_SPI_PACKET_SIZE]; // New dedicated region for addresses like 0x36xxx
 
 // CRC state
 bool crc_off = false;
@@ -43,7 +44,9 @@ uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {
         return &spi_regs[addr - 0xe800];
     } else if (addr >= 0xc0000 && (addr + size) <= 0xc0100) { // bootrom_regs
         return &bootrom_regs[addr - 0xc0000];
-    } else if (addr == 0x150400) { // Special DMA address register
+    } else if (addr >= 0x36000 && (addr + size) <= (0x36000 + MAX_SPI_PACKET_SIZE)) { // hif_buffer_region
+        return &hif_buffer_region[addr - 0x36000];
+    } else if (addr == 0x150400 && size < 4) { // Special DMA address register
         return (uint8_t*)&dma_addr_storage;
     } else if ((addr + size) <= WINC_MEM_SIZE) { // winc_memory
         return &winc_memory[addr];
@@ -413,6 +416,7 @@ int winc_simulator_app_main() {
     memset(periph_regs, 0, sizeof(periph_regs));
     memset(spi_regs, 0, sizeof(spi_regs));
     memset(bootrom_regs, 0, sizeof(bootrom_regs));
+    memset(hif_buffer_region, 0, sizeof(hif_buffer_region));
 
     // Pre-populate some read-only registers with default values
     uint32_t chip_id = 0x1002b0;
