@@ -46,7 +46,7 @@ uint8_t* get_memory_ptr(uint32_t addr, uint32_t size) {
         return &bootrom_regs[addr - 0xc0000];
     } else if (addr >= 0x36000 && (addr + size) <= (0x36000 + MAX_SPI_PACKET_SIZE)) { // hif_buffer_region
         return &hif_buffer_region[addr - 0x36000];
-    } else if (addr == 0x150400 && size < 4) { // Special DMA address register
+    } else if (addr == 0x150400 && size <= 4) { // Special DMA address register
         return (uint8_t*)&dma_addr_storage;
     } else if ((addr + size) <= WINC_MEM_SIZE) { // winc_memory
         return &winc_memory[addr];
