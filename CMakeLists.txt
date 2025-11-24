@@ -186,7 +186,7 @@ elseif(BUILD_MODE STREQUAL "COMBINED")
     )
     target_link_libraries(pico_winc_combined pico_stdlib hardware_spi hardware_gpio pico_multicore hardware_pio hardware_dma)
     pico_enable_stdio_usb(pico_winc_combined 1)
-    pico_enable_stdio_uart(pico_winc_combined 1)
+    pico_enable_stdio_uart(pico_winc_combined 0)
     target_compile_definitions(pico_winc_combined PUBLIC PICO_WINC COMBINED_BUILD)
     pico_add_extra_outputs(pico_winc_combined)
 

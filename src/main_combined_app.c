@@ -7,6 +7,7 @@ void core1_entry() {
 }
 
 int main() {
+    stdio_init_all();
     multicore_launch_core1(core1_entry);
     winc_driver_app_main();
     return 0;
