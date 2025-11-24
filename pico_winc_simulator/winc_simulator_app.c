@@ -11,6 +11,8 @@
 #include "winc_callback_manager.h"
 #include "winc_hif.h"
 #include "sim_log.h"
+#include "pico/cyw43_arch.h"
+#include "winc_wifi_drv.h"
 
 
 #define MAX_SPI_PACKET_SIZE 8192
@@ -404,7 +406,6 @@ void winc_spi_interrupt_handler(void) {
 
 int winc_simulator_app_main() {
     set_sys_clock_khz(125000, true); // Set system clock to 125 MHz
-    stdio_init_all();
 
     // Initialize the memory space
     memset(winc_memory, 0, WINC_MEM_SIZE);
@@ -439,6 +440,16 @@ int winc_simulator_app_main() {
     gpio_set_dir(22, GPIO_OUT);
     gpio_put(22, 1); // Default to high (interrupt not asserted)
 
+    // Initialize CYW43 Wi-Fi
+    if (cyw43_arch_init_with_country(CYW43_COUNTRY_WORLDWIDE)) {
+        printf("Wi-Fi init failed\n");
+    } else {
+        cyw43_arch_enable_sta_mode();
+        printf("Wi-Fi init success\n");
+    }
+
+    winc_drv_init(); // Initialize Driver Layer
+
     winc_dma_init(winc_dma_complete_callback);
     winc_creg_init();
     sim_log_init();
@@ -452,8 +463,15 @@ int winc_simulator_app_main() {
     while (true) {
         winc_creg_process_requests();
         sim_log_process_all_messages();
-        __wfi(); // Wait for next interrupt
-        //printf("[SIMULATOR] Woke up from interrupt\n");
+        // Poll for socket data (if any open)
+        // This is a simple poll, could be optimized
+        //winc_hif_handle_socket_events();
+
+        // Wait for next interrupt or event, but use timeout to allow polling
+        // __wfi(); // __wfi() might sleep too long if we rely on polling
+        // Instead, we can sleep for a short duration or use a best effort polling
+        cyw43_arch_poll(); // Poll the Wi-Fi driver if needed (though background thread does most work)
+        sleep_ms(1);
     }
 
     return 0;
