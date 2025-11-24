@@ -5,7 +5,8 @@
 #include "sim_log.h"
 
 // Define WINC memory size
-#define WINC_MEM_SIZE (1024 * 224) // 224KB for simulation
+// Reduced to fit in RAM with Wi-Fi stack
+#define WINC_MEM_SIZE (1024 * 64)
 
 // Shared memory region for HIF communication
 #define SHARED_MEM_BASE 0x03658c

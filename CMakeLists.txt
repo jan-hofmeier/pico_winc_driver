@@ -125,6 +125,7 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         pico_winc_simulator/winc_dma.c
         pico_winc_simulator/winc_callback_manager.c
         pico_winc_simulator/winc_hif.c
+        pico_winc_simulator/winc_wifi_drv.c
     )
     pico_generate_pio_header(pico_winc_simulator ${CMAKE_CURRENT_SOURCE_DIR}/pico_winc_simulator/spi_slave.pio)
     target_include_directories(pico_winc_simulator PUBLIC
@@ -133,8 +134,9 @@ elseif(BUILD_MODE STREQUAL "SIMULATOR")
         config
         ${WINC_DRIVER_INCLUDES}
         ${PICO_SDK_PATH}/src/rp2_common/hardware_spi/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/config
     )
-    target_link_libraries(pico_winc_simulator pico_stdlib hardware_spi hardware_gpio hardware_pio hardware_dma)
+    target_link_libraries(pico_winc_simulator pico_stdlib hardware_spi hardware_gpio hardware_pio hardware_dma pico_cyw43_arch_lwip_threadsafe_background)
     pico_enable_stdio_usb(pico_winc_simulator 1)
     pico_enable_stdio_uart(pico_winc_simulator 0)
     pico_add_extra_outputs(pico_winc_simulator)
