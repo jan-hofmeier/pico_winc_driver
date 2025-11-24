@@ -7,9 +7,9 @@
 #define MOSI_PIN    16
 #define MISO_PIN    19
 #define CS_PIN      17
-#define EN_PIN      20
+#define EN_PIN      22
 #define RESET_PIN   21
-#define IRQ_PIN     22
+#define IRQ_PIN     20
 
 #define SIMULATOR_SPI_LOG_ENABLE 1
 

@@ -457,6 +457,7 @@ int winc_simulator_app_main() {
     winc_hif_init();
     pio_spi_slave_init(winc_spi_interrupt_handler);
 
+    sleep_ms(2000); // Increased sleep for serial capture
     printf("Pico WINC1500 Simulator Initialized. Waiting for SPI commands.\n");
 
     // We will now be interrupt driven. The main loop can process queued requests.

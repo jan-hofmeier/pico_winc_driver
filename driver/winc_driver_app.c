@@ -163,7 +163,6 @@ static void wrapped_socket_resolve_handler(uint8_t *doamin_name, uint32_t server
 
 int winc_driver_app_main()
 {
-    stdio_init_all();
     sleep_ms(2000); // Increased sleep for serial capture
     printf("Starting WINC driver initialization...\n");
 
